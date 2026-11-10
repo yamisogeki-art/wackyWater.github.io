@@ -1,0 +1,21 @@
+[build]
+  publish = "build/web"
+  command = "bash netlify.sh"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/app-release.apk"
+  [headers.values]
+    Content-Type = "application/vnd.android.package-archive"
+    Content-Disposition = "attachment; filename=WackyWater.apk"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

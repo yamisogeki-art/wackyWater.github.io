@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wacky Water - Water Refill & Delivery App</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <style>
+    :root {
+      --primary: #0284C7;
+      --primary-dark: #0369A1;
+      --bg-light: #F8FAFC;
+      --text-dark: #0F172A;
+      --text-muted: #64748B;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-light);
+      color: var(--text-dark);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 480px;
+      width: 100%;
+      background: #FFFFFF;
+      border-radius: 24px;
+      padding: 36px 28px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+      text-align: center;
+      margin-top: auto;
+      margin-bottom: auto;
+    }
+
+    .app-icon {
+      width: 104px;
+      height: 104px;
+      border-radius: 24px;
+      box-shadow: 0 8px 20px rgba(2, 132, 199, 0.25);
+      margin-bottom: 20px;
+      object-fit: cover;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text-dark);
+      margin-bottom: 8px;
+    }
+
+    p.subtitle {
+      font-size: 15px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 28px;
+    }
+
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      padding: 16px 24px;
+      background-color: var(--primary);
+      color: #FFFFFF;
+      font-weight: 700;
+      font-size: 16px;
+      border-radius: 14px;
+      text-decoration: none;
+      transition: background-color 0.2s ease, transform 0.1s ease;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+    }
+
+    .download-btn:hover {
+      background-color: var(--primary-dark);
+    }
+
+    .download-btn:active {
+      transform: scale(0.98);
+    }
+
+    .info-card {
+      margin-top: 28px;
+      padding: 16px;
+      background-color: #F1F5F9;
+      border-radius: 14px;
+      text-align: left;
+    }
+
+    .info-card h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-bottom: 8px;
+    }
+
+    .info-card ol {
+      padding-left: 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .footer {
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+  </style>
+  <script>
+    // Handles Supabase authentication deep-link callbacks if redirected via web
+    if (window.location.hash && window.location.hash.includes('access_token')) {
+      const appUri = 'wackysmart://auth/callback' + window.location.hash;
+      window.location.href = appUri;
+    }
+  </script>
+</head>
+<body>
+
+  <div class="container">
+    <!-- App Logo -->
+    <img src="wackysmart-app-icon-1024.png" alt="Wacky Water Icon" class="app-icon">
+
+    <h1>Wacky Water</h1>
+    <p class="subtitle">Official Mobile App for Water Refill Delivery, Driver Live GPS Tracking, and ML Demand Forecasting in Zamboanga Sibugay.</p>
+
+    <!-- Download Button -->
+    <a href="app-release.apk" download="WackyWater.apk" class="download-btn">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      Download APK for Android
+    </a>
+
+    <!-- Installation Steps -->
+    <div class="info-card">
+      <h3>📱 How to Install on Android:</h3>
+      <ol>
+        <li>Tap the <b>Download APK</b> button above.</li>
+        <li>When prompted, choose <b>Download anyway</b>.</li>
+        <li>Open the downloaded <code>WackyWater.apk</code> file.</li>
+        <li>If asked, enable <b>"Allow from this source"</b> in Chrome/Settings.</li>
+        <li>Tap <b>Install</b> and launch Wacky Water!</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="footer">
+    &copy; 2025 Wacky Water. All rights reserved.
+  </div>
+
+</body>
+</html>

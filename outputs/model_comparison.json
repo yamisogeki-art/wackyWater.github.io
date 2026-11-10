@@ -1,0 +1,28 @@
+{
+  "lightgbm": {
+    "mae": 28.636,
+    "rmse": 37.672,
+    "mape": 16.62
+  },
+  "xgboost": {
+    "mae": 28.782,
+    "rmse": 38.134,
+    "mape": 16.934
+  },
+  "winner": "lightgbm",
+  "feature_columns": [
+    "lag_1",
+    "lag_7",
+    "lag_14",
+    "rolling_mean_7",
+    "rolling_std_7",
+    "rolling_mean_14",
+    "day_of_week",
+    "month",
+    "day",
+    "is_weekend",
+    "is_payday_window",
+    "is_dry_season"
+  ],
+  "val_days": 30
+}
