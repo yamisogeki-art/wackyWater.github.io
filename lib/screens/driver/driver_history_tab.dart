@@ -16,11 +16,16 @@ class _DriverHistoryTabState extends State<DriverHistoryTab> {
   @override
   void initState() {
     super.initState();
-    _historyStream = Supabase.instance.client
-        .from('delivery_requests')
-        .stream(primaryKey: ['id'])
-        .eq('status', 'delivered')
-        .order('requested_at', ascending: false);
+    final driverId = Supabase.instance.client.auth.currentUser?.id;
+    if (driverId != null) {
+      _historyStream = Supabase.instance.client
+          .from('delivery_requests')
+          .stream(primaryKey: ['id'])
+          .eq('driver_id', driverId)
+          .order('requested_at', ascending: false);
+    } else {
+      _historyStream = Stream.value([]);
+    }
   }
 
   @override
@@ -40,7 +45,10 @@ class _DriverHistoryTabState extends State<DriverHistoryTab> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final deliveries = snapshot.data ?? [];
+          final rawDeliveries = snapshot.data ?? [];
+          final deliveries = rawDeliveries
+              .where((d) => d['status'] == 'delivered')
+              .toList();
 
           if (deliveries.isEmpty) {
             return const Center(

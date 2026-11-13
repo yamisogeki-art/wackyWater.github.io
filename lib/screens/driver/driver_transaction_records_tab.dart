@@ -179,17 +179,16 @@ class _DriverTransactionRecordsTabState extends State<DriverTransactionRecordsTa
               // TRANSACTIONS LIST (Arranged from latest to oldest)
               Expanded(
                 child: rawTransactions.isEmpty
-                    ? Center(
+                    ? const Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.receipt_long_outlined, size: 48, color: Color(0xFF94A3B8)),
-                            const SizedBox(height: 12),
-                            const Text(
+                            Icon(Icons.receipt_long_outlined, size: 48, color: Color(0xFF94A3B8)),
+                            SizedBox(height: 12),
+                            Text(
                               'No transactions recorded yet.',
                               style: TextStyle(color: Color(0xFF64748B), fontSize: 14, fontWeight: FontWeight.w600),
                             ),
-                            const SizedBox(height: 12),
                           ],
                         ),
                       )
@@ -257,7 +256,7 @@ class _DriverTransactionRecordsTabState extends State<DriverTransactionRecordsTa
                                     const SizedBox(width: 4),
                                     Expanded(
                                       child: Text(
-                                        tx['address_line'] ?? tx['area'] ?? 'Cagayan de Oro City',
+                                        tx['address_line'] ?? tx['area'] ?? 'Tungawan, Zamboanga Sibugay',
                                         style: const TextStyle(fontSize: 12.5, color: Color(0xFF64748B)),
                                         overflow: TextOverflow.ellipsis,
                                       ),

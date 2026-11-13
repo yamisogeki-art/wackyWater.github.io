@@ -10,7 +10,7 @@ import '../../services/driver_location_service.dart';
 import '../../services/osrm_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_theme.dart';
-import 'delivery_completed_screen.dart';
+import 'delivery_details_screen.dart';
 
 class DriverEnRouteScreen extends StatefulWidget {
   final DeliveryStop stop;
@@ -110,19 +110,11 @@ class _DriverEnRouteScreenState extends State<DriverEnRouteScreen> {
 
     if (!mounted) return;
 
-    // Move to Screen 2: Delivery Complete Confirmation
+    // Delivery details -> Delivered -> camera proof -> sale form -> completed.
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) => DeliveryCompletedScreen(
-          customerName: widget.stop.name,
-          location: widget.stop.addressLine,
-          gallons: widget.stop.gallons.toDouble(),
-          waterType: widget.stop.waterType,
-          completedAt: DateTime.now(),
-          stop: widget.stop,
-          controller: widget.controller,
-        ),
+        builder: (_) => DeliveryDetailsScreen(stop: widget.stop, controller: widget.controller),
       ),
     );
   }
@@ -342,7 +334,7 @@ class _DriverEnRouteScreenState extends State<DriverEnRouteScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         child: const Text(
-                          'START DELIVERY',
+                          'ARRIVED - DELIVERY DETAILS',
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.5),
                         ),
                       ),

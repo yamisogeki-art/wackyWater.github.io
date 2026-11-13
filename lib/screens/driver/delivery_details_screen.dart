@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/pricing.dart';
 import '../../services/driver_delivery_service.dart';
 import '../../theme/app_colors.dart';
@@ -24,6 +26,8 @@ class DeliveryDetailsScreen extends StatefulWidget {
 
 class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
   bool _saving = false;
+  final ImagePicker _picker = ImagePicker();
+  XFile? _proof;
 
   DeliveryStop get _stop => widget.stop;
 
@@ -32,9 +36,79 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
     return i < 0 ? 0 : i;
   }
 
+  /// Step 1 of "Mark as Delivered": the driver must take a proof-of-delivery
+  /// photo with the camera (no gallery option) before the sale form opens.
+  Future<void> _startMarkDelivered() async {
+    XFile? photo;
+    while (true) {
+      try {
+        photo = await _picker.pickImage(
+          source: ImageSource.camera,
+          preferredCameraDevice: CameraDevice.rear,
+          imageQuality: 70,
+          maxWidth: 1600,
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Couldn't open the camera. Allow camera access and try again. ($e)")),
+        );
+        return;
+      }
+      if (!mounted) return;
+      if (photo == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('A proof-of-delivery photo is required to mark this order delivered.')),
+        );
+        return;
+      }
+      final bytes = await photo.readAsBytes();
+      if (!mounted) return;
+      final usePhoto = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Proof of delivery'),
+          content: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.memory(bytes, fit: BoxFit.cover),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Retake')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Use photo')),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      if (usePhoto == true) break;
+      if (usePhoto == null) return;
+    }
+    _proof = photo;
+    await _openCompleteDeliveryForm();
+  }
+
+  /// Uploads the captured photo and returns its storage path, or null on failure.
+  Future<String?> _uploadProof() async {
+    final photo = _proof;
+    if (photo == null) return null;
+    try {
+      final bytes = await photo.readAsBytes();
+      final path = 'order_${_stop.id}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      await Supabase.instance.client.storage.from('delivery-proofs').uploadBinary(
+        path,
+        bytes,
+        fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: false),
+      );
+      return path;
+    } catch (e) {
+      debugPrint('Proof upload failed: $e');
+      return null;
+    }
+  }
+
   Future<void> _openCompleteDeliveryForm() async {
     final gallonsController = TextEditingController(text: _stop.gallons.toString());
-    String waterType = _stop.waterType;
+    const waterType = 'mineral'; // only mineral water is sold
     String orderType = _stop.orderType;
     String outcome = 'paid'; // 'paid' | 'credit'
     final priceController = TextEditingController(text: pricePerGallonFor(waterType).toStringAsFixed(2));
@@ -63,19 +137,8 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
                 const Text('Enter the actual delivery data below.',
                     style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                 const SizedBox(height: 16),
-                const Text('Water type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                const SizedBox(height: 6),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'purified', label: Text('Purified')),
-                    ButtonSegment(value: 'mineral', label: Text('Mineral')),
-                  ],
-                  selected: {waterType},
-                  onSelectionChanged: (v) => setSheetState(() {
-                    waterType = v.first;
-                    priceController.text = pricePerGallonFor(waterType).toStringAsFixed(2);
-                  }),
-                ),
+                const Text('Water type: Mineral',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 const SizedBox(height: 12),
                 const Text('Order type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 const SizedBox(height: 6),
@@ -179,6 +242,18 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
     required bool paidInFull,
   }) async {
     setState(() => _saving = true);
+
+    // Proof first: if the upload fails the delivery is NOT marked complete.
+    final proofPath = await _uploadProof();
+    if (proofPath == null) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't upload the proof photo. Check your connection and try again.")),
+      );
+      return;
+    }
+
     final result = await widget.controller.completeDelivery(
       stop: _stop,
       gallons: gallons,
@@ -193,6 +268,14 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
     if (!result.ok) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to record: ${result.error}')));
       return;
+    }
+
+    try {
+      await Supabase.instance.client
+          .from('delivery_requests')
+          .update({'proof_photo_path': proofPath}).eq('id', _stop.id);
+    } catch (e) {
+      debugPrint('Saving proof path failed: $e');
     }
 
     if (result.forecastSyncFailed) {
@@ -349,7 +432,7 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: _saving ? null : _openCompleteDeliveryForm,
+                    onPressed: _saving ? null : _startMarkDelivered,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
@@ -357,11 +440,18 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
                     ),
                     child: _saving
                         ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                          )
-                        : const Text('Mark as Delivered', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                        : const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.photo_camera_outlined, size: 20),
+                        SizedBox(width: 8),
+                        Text('Delivered', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
                   ),
                 ),
               ),

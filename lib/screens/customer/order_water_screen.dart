@@ -21,7 +21,7 @@ class OrderWaterScreen extends StatefulWidget {
 
 class _OrderWaterScreenState extends State<OrderWaterScreen> {
   int _gallons = 1;
-  String _waterType = 'purified'; // 'purified' | 'mineral'
+  String _waterType = 'mineral'; // 'purified' | 'mineral'
   String _orderType = 'refill'; // 'exchange' | 'refill'
   bool _isLoading = false;
   String _addressLabel = 'Select a delivery location';

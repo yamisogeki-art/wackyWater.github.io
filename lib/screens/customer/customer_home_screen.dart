@@ -4,6 +4,7 @@ import '../../services/order_estimate_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/brand_header.dart';
 import '../../widgets/reminder_notification_card.dart';
+import '../kyc/kyc_gate.dart';
 import 'customer_profile_screen.dart';
 import 'household_info_screen.dart';
 import 'ml_training_screen.dart';
@@ -61,7 +62,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     // the Profile tab.
     final List<Widget> pages = [
       HomeDashboard(userName: _userProfile?['full_name'], isLoading: _isLoadingProfile),
-      const OrderWaterScreen(),
+      const KycGate(child: OrderWaterScreen()),
       const OrderHistoryScreen(),
       const CustomerProfileScreen(),
     ];
@@ -128,7 +129,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       daysUntil: estimate.daysUntil,
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const OrderWaterScreen()),
+                        MaterialPageRoute(builder: (_) => const KycGate(child: OrderWaterScreen())),
                       ),
                     ),
                   );
@@ -140,7 +141,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 title: 'Request Delivery',
                 subtitle: 'Order your water refill now',
                 icon: Icons.local_shipping,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderWaterScreen())),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const KycGate(child: OrderWaterScreen()))),
               ),
               const SizedBox(height: 16),
               _buildActionCard(
@@ -185,13 +186,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
   }
 
   Widget _buildActionCard(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required VoidCallback onTap,
-    Color color = AppColors.primary,
-  }) {
+      BuildContext context, {
+        required String title,
+        required String subtitle,
+        required IconData icon,
+        required VoidCallback onTap,
+        Color color = AppColors.primary,
+      }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),

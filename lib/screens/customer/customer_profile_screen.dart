@@ -75,27 +75,9 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     if (value == null) return;
 
     final phoneVal = value.isEmpty ? null : value;
-    final userId = Supabase.instance.client.auth.currentUser?.id;
 
     try {
-      bool saved = false;
-
-      // 1. First try direct profile table update
-      if (userId != null) {
-        try {
-          await Supabase.instance.client.from('profiles').update({'phone': phoneVal}).eq('id', userId);
-          saved = true;
-        } catch (_) {
-          // Direct update failed (e.g., RLS policy restriction or phone column missing)
-        }
-      }
-
-      // 2. If direct update didn't succeed, try calling the set_my_phone RPC function
-      if (!saved) {
-        await Supabase.instance.client.rpc('set_my_phone', params: {'p_phone': value});
-        saved = true;
-      }
-
+      await Supabase.instance.client.rpc('set_my_phone', params: {'p_phone': phoneVal});
       if (mounted) {
         setState(() => _phone = phoneVal);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -105,11 +87,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Could not save contact number. Make sure to run supabase_ui_update.sql in your Supabase SQL Editor.\n\nError: $e',
-            ),
-          ),
+          SnackBar(content: Text('Could not save contact number: $e')),
         );
       }
     }

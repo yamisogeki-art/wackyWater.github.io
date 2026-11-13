@@ -10,6 +10,7 @@ import 'driver_history_tab.dart';
 import 'driver_profile_tab.dart';
 import 'driver_route_screen.dart';
 import 'driver_transaction_records_tab.dart';
+import 'driver_assign_orders_screen.dart';
 
 class DriverHomeScreen extends StatefulWidget {
   const DriverHomeScreen({super.key});

@@ -72,7 +72,7 @@ class _MlTrainingScreenState extends State<MlTrainingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('LightGBM Model Training')),
+      appBar: AppBar(title: const Text('Calculating Order Estimate')),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),
         child: Column(
@@ -83,17 +83,17 @@ class _MlTrainingScreenState extends State<MlTrainingScreen> {
               width: 140,
               height: 140,
               decoration: const BoxDecoration(color: AppColors.primaryLight, shape: BoxShape.circle),
-              child: const Icon(Icons.account_tree, size: 68, color: AppColors.primary),
+              child: const Icon(Icons.auto_graph_outlined, size: 68, color: AppColors.primary),
             ),
             const SizedBox(height: 32),
             const Text(
-              'Training LightGBM Model...',
+              'Calculating your estimate...',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             const Text(
-              'Building gradient-boosted decision trees from your order history and usage patterns.',
+              'Analyzing your household consumption patterns and recent order history.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textMuted, height: 1.4),
             ),

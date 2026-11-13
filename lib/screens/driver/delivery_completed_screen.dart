@@ -17,7 +17,7 @@ class DeliveryCompletedScreen extends StatelessWidget {
   const DeliveryCompletedScreen({
     super.key,
     required this.customerName,
-    this.location = 'Main St, Cagayan de Oro',
+    this.location = 'Tungawan, Zamboanga Sibugay',
     required this.gallons,
     this.waterType = 'purified',
     required this.completedAt,
@@ -115,7 +115,7 @@ class DeliveryCompletedScreen extends StatelessWidget {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        '$customerName, $location, CDO',
+                                        '$customerName, $location',
                                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1E293B)),
                                       ),
                                     ],

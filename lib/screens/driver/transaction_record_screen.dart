@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/pricing.dart';
@@ -43,11 +42,15 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
   late final TextEditingController _locationController;
 
   int _quantity = 2;
-  String _waterType = 'purified'; // 'purified' | 'mineral'
+  String _waterType = 'mineral'; // Default to mineral
   String _orderType = 'refill'; // 'refill' | 'exchange'
   String _status = 'Delivered - Paid';
   String _paymentType = 'Cash on Delivery';
   bool _isSubmitting = false;
+
+  // Selected customer for manual entry
+  String? _selectedCustomerId;
+  List<Map<String, dynamic>> _customerProfiles = [];
 
   // Real-time lookup caches for related customer profiles, addresses, and delivery requests
   final Map<String, String> _profileNames = {};
@@ -74,6 +77,31 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
           SnackBar(content: Text('Could not capture photo: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _loadCustomerProfiles() async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('profiles')
+          .select('id, full_name, email')
+          .order('full_name');
+      if (mounted) {
+        setState(() {
+          _customerProfiles = List<Map<String, dynamic>>.from(rows);
+          if (widget.stop != null) {
+            _selectedCustomerId = widget.stop!.request['customer_id']?.toString();
+          } else if (_customerProfiles.isNotEmpty) {
+            _selectedCustomerId = _customerProfiles.first['id']?.toString();
+            final firstCust = _customerProfiles.first;
+            if (_userNameController.text.isEmpty) {
+              _userNameController.text = (firstCust['full_name'] as String?) ?? 'Customer';
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Could not load customer profiles: $e');
     }
   }
 
@@ -104,6 +132,8 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
 
     final initialIndex = (widget.showFormInitially || widget.stop != null) ? 1 : 0;
     _tabController = TabController(length: 2, vsync: this, initialIndex: initialIndex);
+
+    _loadCustomerProfiles();
 
     // Real-time Database Subscription
     _transactionsStream = Supabase.instance.client
@@ -202,9 +232,11 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
   }
 
   Future<void> _submitRecord() async {
-    final nameError = InputValidators.lettersOnly(_userNameController.text, fieldName: 'Customer Name');
-    if (nameError != null) {
-      InputErrorHandler.showErrorSnackBar(context, nameError);
+    final customerId = widget.stop?.request['customer_id']?.toString() ?? _selectedCustomerId;
+    if (customerId == null || customerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a valid customer.')),
+      );
       return;
     }
 
@@ -216,8 +248,6 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
         return;
       }
     }
-
-    final customerName = _userNameController.text.trim();
 
     setState(() => _isSubmitting = true);
     final client = Supabase.instance.client;
@@ -243,18 +273,15 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
           return;
         }
       } else {
-        // Direct database insert into customer_transactions
+        // Direct database insert into customer_transactions (using valid DB schema columns)
         await client.from('customer_transactions').insert({
-          'customer_id': client.auth.currentUser?.id,
-          'customer_name': customerName,
-          'address_line': _locationController.text.trim(),
+          'customer_id': customerId,
           'transaction_date': dateStr,
           'gallons': _quantity.toDouble(),
           'price_per_gallon': _pricePerGallon,
           'water_type': _waterType,
           'amount_paid': isPaid ? _totalPrice : 0,
           'status': isPaid ? 'paid' : 'unpaid',
-          'notes': 'Payment: $_paymentType | Status: $_status | Order: $_orderType',
         });
 
         // Sync aggregate total for demand forecasting
@@ -703,27 +730,56 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. User Name
+          // 1. Customer Selection / Name
           const Text(
-            'Customer Name',
+            'Customer',
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 6),
-          TextField(
-            controller: _userNameController,
-            inputFormatters: [InputFormatters.lettersOnly],
-            decoration: InputDecoration(
-              hintText: 'e.g. Juan Dela Cruz (Letters only)',
-              prefixIcon: const Icon(Icons.person_outline, color: AppColors.primary),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+          if (widget.stop != null)
+            TextField(
+              controller: _userNameController,
+              readOnly: true,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.person_outline, color: AppColors.primary),
+                filled: true,
+                fillColor: const Color(0xFFF1F5F9),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
+            )
+          else
+            DropdownButtonFormField<String>(
+              initialValue: _selectedCustomerId,
+              isExpanded: true,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.person_outline, color: AppColors.primary),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              hint: const Text('Select Customer'),
+              items: _customerProfiles.map((cust) {
+                final id = cust['id'].toString();
+                final name = (cust['full_name'] as String?)?.trim();
+                final displayName = (name != null && name.isNotEmpty) ? name : (cust['email'] ?? 'Customer');
+                return DropdownMenuItem<String>(
+                  value: id,
+                  child: Text(displayName, overflow: TextOverflow.ellipsis),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _selectedCustomerId = val;
+                    final cust = _customerProfiles.firstWhere((c) => c['id'].toString() == val, orElse: () => {});
+                    final name = cust['full_name'] as String?;
+                    if (name != null) _userNameController.text = name;
+                  });
+                }
+              },
             ),
-          ),
           const SizedBox(height: 16),
 
           // 2. Delivery Location

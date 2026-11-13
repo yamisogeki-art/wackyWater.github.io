@@ -86,7 +86,7 @@ class _DeliveryScheduleScreenState extends State<DeliveryScheduleScreen> {
       final pendingRaw = await Supabase.instance.client
           .from('delivery_requests')
           .select('id, customer_id, address_id, gallons_requested, requested_at, '
-              'customer_addresses(area, label)')
+          'customer_addresses(area, label)')
           .eq('status', 'pending')
           .order('requested_at');
 
@@ -196,18 +196,6 @@ class _DeliveryScheduleScreenState extends State<DeliveryScheduleScreen> {
     }
   }
 
-  Future<void> _markDelivered(_RoutedOrder order) async {
-    await Supabase.instance.client
-        .from('delivery_requests')
-        .update({'status': 'delivered'}).eq('id', order.id);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Marked delivered - record payment in Transactions.')),
-      );
-    }
-    _buildSchedule();
-  }
-
   String _tierLabel(int tier) {
     switch (tier) {
       case 2:
@@ -246,71 +234,67 @@ class _DeliveryScheduleScreenState extends State<DeliveryScheduleScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null
-              ? Center(child: Text(_errorMessage!))
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _TargetGauge(
-                      total: _todaysTotalGallons,
-                      min: _minTargetGallons.toDouble(),
-                      max: _maxTargetGallons.toDouble(),
-                      predicted: _predictedGallons,
-                      modelVersion: _modelVersion,
-                    ),
-                    const SizedBox(height: 20),
-                    Text("Today's route (${_todaysRoute.length} stops)",
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    if (_todaysRoute.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Text('No pending orders to route right now.'),
-                      )
-                    else
-                      ..._todaysRoute.map((o) => Card(
-                            color: _tierColor(o.tier),
-                            margin: const EdgeInsets.symmetric(vertical: 4),
-                            child: ListTile(
-                              title: Text('${_nameFor(o.customerId)} - ${o.gallons.toStringAsFixed(0)} gal'),
-                              subtitle: Text(
-                                '${o.area} - ${_tierLabel(o.tier)}\n'
-                                '${o.orderCountInArea} order(s) in area - '
-                                '${o.daysSinceAreaServed > 1000 ? 'never served' : '${o.daysSinceAreaServed}d since last delivery'}',
-                              ),
-                              isThreeLine: true,
-                              trailing: FilledButton(
-                                onPressed: () => _markDelivered(o),
-                                child: const Text('Delivered'),
-                              ),
-                            ),
-                          )),
-                    if (_deferred.isNotEmpty) ...[
-                      const SizedBox(height: 20),
-                      Text('Deferred to next schedule (${_deferred.length})',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold)),
-                      const Text(
-                        "Over today's 800-gallon target - stays pending and will be "
-                        're-prioritized automatically next time the route is built.',
-                        style: TextStyle(color: Colors.grey, fontSize: 12),
-                      ),
-                      const SizedBox(height: 8),
-                      ..._deferred.map((o) => Card(
-                            margin: const EdgeInsets.symmetric(vertical: 4),
-                            child: ListTile(
-                              leading: const Icon(Icons.schedule_outlined),
-                              title: Text('${_nameFor(o.customerId)} - ${o.gallons.toStringAsFixed(0)} gal'),
-                              subtitle: Text(o.area),
-                            ),
-                          )),
-                    ],
-                  ],
+          ? Center(child: Text(_errorMessage!))
+          : ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _TargetGauge(
+            total: _todaysTotalGallons,
+            min: _minTargetGallons.toDouble(),
+            max: _maxTargetGallons.toDouble(),
+            predicted: _predictedGallons,
+            modelVersion: _modelVersion,
+          ),
+          const SizedBox(height: 20),
+          Text("Today's route (${_todaysRoute.length} stops)",
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          if (_todaysRoute.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text('No pending orders to route right now.'),
+            )
+          else
+            ..._todaysRoute.map((o) => Card(
+              color: _tierColor(o.tier),
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              child: ListTile(
+                title: Text('${_nameFor(o.customerId)} - ${o.gallons.toStringAsFixed(0)} gal'),
+                subtitle: Text(
+                  '${o.area} - ${_tierLabel(o.tier)}\n'
+                      '${o.orderCountInArea} order(s) in area - '
+                      '${o.daysSinceAreaServed > 1000 ? 'never served' : '${o.daysSinceAreaServed}d since last delivery'}',
                 ),
+                isThreeLine: true,
+              ),
+            )),
+          if (_deferred.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Text('Deferred to next schedule (${_deferred.length})',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            const Text(
+              "Over today's 800-gallon target - stays pending and will be "
+                  're-prioritized automatically next time the route is built.',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            ..._deferred.map((o) => Card(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              child: ListTile(
+                leading: const Icon(Icons.schedule_outlined),
+                title: Text('${_nameFor(o.customerId)} - ${o.gallons.toStringAsFixed(0)} gal'),
+                subtitle: Text(o.area),
+              ),
+            )),
+          ],
+        ],
+      ),
     );
   }
 }

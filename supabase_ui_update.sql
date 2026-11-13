@@ -49,3 +49,16 @@ drop policy if exists "Drivers can read their customers' profiles" on public.pro
 create policy "Drivers can read their customers' profiles"
   on public.profiles for select
   using (public.driver_serves_customer(id));
+
+-- 5) Secure forecasts table:
+--    Enable Row Level Security (RLS).
+--    Allow SELECT for authenticated users (Admin / App UI).
+--    Restrict INSERT/UPDATE so only the Python FastAPI backend server
+--    (using SUPABASE_SERVICE_KEY, which bypasses RLS) can write forecast records.
+alter table public.forecasts enable row level security;
+
+drop policy if exists "Authenticated users can read forecasts" on public.forecasts;
+create policy "Authenticated users can read forecasts"
+  on public.forecasts for select
+  to authenticated
+  using (true);

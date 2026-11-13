@@ -30,8 +30,11 @@ from supabase import create_client
 ENV = os.environ.get("ENV", "development").lower()
 IS_PROD = ENV in ("production", "prod")
 API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "wackysmart_secret_key_2025")
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://hsrsuuyqqtyqeutcvorp.supabase.co")
+SUPABASE_SERVICE_KEY = os.environ.get(
+    "SUPABASE_SERVICE_KEY",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhzcnN1dXlxcXR5cWV1dGN2b3JwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwODQ4NzcsImV4cCI6MjEwMzY2MDg3N30.4S81Zzktm9RTD_HvqWT8LXXdBrtK4Znt3sa60uvLGYc"
+)
 
 # Global loaded model in-memory storage
 ml_model = None
