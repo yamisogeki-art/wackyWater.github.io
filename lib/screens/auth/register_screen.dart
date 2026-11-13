@@ -191,6 +191,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           color: const Color(0xFF64748B),
                         ),
                   ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0F9FF),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFBAE6FD)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.badge_outlined, size: 22, color: Color(0xFF0284C7)),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Step 1 of 2: Basic Registration\n(Valid ID Photo & Face Selfie follows upon log in)',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF0369A1)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 28),
                   
                   // Full Name
