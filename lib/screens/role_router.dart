@@ -5,6 +5,7 @@ import 'customer/customer_home_screen.dart';
 import 'driver/driver_home_screen.dart';
 import 'admin/admin_home_screen.dart';
 import '../theme/app_theme.dart';
+import '../widgets/logout_confirm.dart';
 
 /// After a successful login, both customer and driver accounts land
 /// here first. It looks up the signed-in user's role in the `profiles`
@@ -63,9 +64,7 @@ class _RoleRouterState extends State<RoleRouter> {
                   const Text('Could not determine your account type.'),
                   const SizedBox(height: 12),
                   ElevatedButton(
-                    onPressed: () async {
-                      await Supabase.instance.client.auth.signOut();
-                    },
+                    onPressed: () => logoutWithConfirmation(context),
                     child: const Text('Back to login'),
                   ),
                 ],

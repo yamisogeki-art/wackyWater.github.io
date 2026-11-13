@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/driver_location_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/logout_confirm.dart';
 
 class DriverProfileTab extends StatefulWidget {
   const DriverProfileTab({super.key});
@@ -67,8 +68,10 @@ class _DriverProfileTabState extends State<DriverProfileTab> {
   }
 
   Future<void> _logout() async {
-    await _locationService.stop();
-    await Supabase.instance.client.auth.signOut();
+    if (await confirmLogout(context)) {
+      await _locationService.stop();
+      await Supabase.instance.client.auth.signOut();
+    }
   }
 
   @override

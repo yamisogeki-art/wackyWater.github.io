@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/logout_confirm.dart';
 
 /// MotoGuard-style live tracking, applied to delivery operations: every
 /// online driver's position, plus a line to wherever they're currently
@@ -74,7 +75,7 @@ class _AdminDriverMapScreenState extends State<AdminDriverMapScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => Supabase.instance.client.auth.signOut(),
+            onPressed: () => logoutWithConfirmation(context),
           ),
         ],
       ),

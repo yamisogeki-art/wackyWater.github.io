@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/auth_config.dart';
 import '../../services/forecast_service.dart';
+import '../../widgets/logout_confirm.dart';
 
 class ForecastScreen extends StatefulWidget {
   const ForecastScreen({super.key});
@@ -92,7 +93,7 @@ class _ForecastScreenState extends State<ForecastScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => Supabase.instance.client.auth.signOut(),
+            onPressed: () => logoutWithConfirmation(context),
             tooltip: 'Sign out',
           ),
         ],

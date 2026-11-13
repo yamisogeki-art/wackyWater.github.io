@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/auth_config.dart';
 import '../../services/forecast_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/logout_confirm.dart';
 import 'admin_driver_map_screen.dart';
 import 'customer_credit_screen.dart';
 import 'daily_transactions_screen.dart';
@@ -126,7 +127,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
           IconButton(
             tooltip: 'Sign out',
             icon: const Icon(Icons.logout),
-            onPressed: () => Supabase.instance.client.auth.signOut(),
+            onPressed: () => logoutWithConfirmation(context),
           ),
         ],
       ),

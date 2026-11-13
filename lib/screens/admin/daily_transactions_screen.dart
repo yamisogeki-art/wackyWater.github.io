@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+
 /// Admin screen for recording the day's water sales.
 ///
 /// Delivered orders that haven't been turned into a transaction yet are

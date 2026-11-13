@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
-import '../../utils/validators.dart';
+import '../../widgets/logout_confirm.dart';
 import 'household_info_screen.dart';
 import 'saved_locations_screen.dart';
 import 'track_order_screen.dart';
@@ -158,7 +157,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                 ),
                 const SizedBox(height: 24),
                 OutlinedButton.icon(
-                  onPressed: () => Supabase.instance.client.auth.signOut(),
+                  onPressed: () => logoutWithConfirmation(context),
                   icon: const Icon(Icons.logout),
                   label: const Text('LOGOUT'),
                   style: OutlinedButton.styleFrom(

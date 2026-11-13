@@ -22,13 +22,29 @@ class _KycGateState extends State<KycGate> {
   late Future<Map<String, dynamic>?> _future = _load();
 
   Future<Map<String, dynamic>?> _load() async {
-    final uid = Supabase.instance.client.auth.currentUser?.id;
+    final db = Supabase.instance.client;
+    final uid = db.auth.currentUser?.id;
     if (uid == null) return null;
-    return Supabase.instance.client
+
+    Future<Map<String, dynamic>?> read() => db
         .from('kyc_submissions')
-        .select('status, review_note')
+        .select('status, review_note, face_match_score')
         .eq('user_id', uid)
         .maybeSingle();
+
+    var row = await read();
+
+    // A submission that is still 'pending' with no score was never checked
+    // (for example the server was unreachable). Ask the server to check it now.
+    if (row != null && row['status'] == 'pending' && row['face_match_score'] == null) {
+      try {
+        await db.functions.invoke('kyc-verify');
+        row = await read();
+      } catch (_) {
+        // Leave it pending; the user can tap "Check again" later.
+      }
+    }
+    return row;
   }
 
   void _reload() => setState(() => _future = _load());
