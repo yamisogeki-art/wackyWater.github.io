@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-
 /// Admin screen for recording the day's water sales.
 ///
 /// Delivered orders that haven't been turned into a transaction yet are
@@ -198,25 +197,13 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
                   ),
                   items: _customers
                       .map((c) => DropdownMenuItem<String>(
-                            value: c['id'] as String,
-                            child: Text(_nameFor(c['id'] as String)),
-                          ))
+                    value: c['id'] as String,
+                    child: Text(_nameFor(c['id'] as String)),
+                  ))
                       .toList(),
                   onChanged: (v) {
                     if (v != null) setDialogState(() => selectedCustomerId = v);
                   },
-                ),
-                const SizedBox(height: 12),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'purified', label: Text('Purified')),
-                    ButtonSegment(value: 'mineral', label: Text('Mineral')),
-                  ],
-                  selected: {waterType},
-                  onSelectionChanged: (v) => setDialogState(() {
-                    waterType = v.first;
-                    priceController.text = _priceFor(waterType).toStringAsFixed(2);
-                  }),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -308,11 +295,11 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
               // still need to be reconciled into today's record.
               final pendingOrders = (orderSnapshot.data ?? [])
                   .where((o) =>
-                      o['status'] == 'delivered' && !recordedOrderIds.contains(o['id']))
+              o['status'] == 'delivered' && !recordedOrderIds.contains(o['id']))
                   .toList();
 
               final todayTx =
-                  transactions.where((t) => t['transaction_date'] == _todayStr()).toList();
+              transactions.where((t) => t['transaction_date'] == _todayStr()).toList();
 
               return ListView(
                 padding: const EdgeInsets.only(bottom: 96, top: 8),
@@ -320,19 +307,19 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
                   if (pendingOrders.isNotEmpty) ...[
                     const _SectionHeader('Delivered orders to record'),
                     ...pendingOrders.map((order) => Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                          color: Colors.amber.shade50,
-                          child: ListTile(
-                            leading: const Icon(Icons.local_shipping_outlined),
-                            title: Text(
-                                '${order['gallons_requested']} gallons - order #${order['id']}'),
-                            subtitle: Text(_nameFor(order['customer_id'] as String)),
-                            trailing: FilledButton(
-                              onPressed: () => _promptRecordFromOrder(order),
-                              child: const Text('Record'),
-                            ),
-                          ),
-                        )),
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      color: Colors.amber.shade50,
+                      child: ListTile(
+                        leading: const Icon(Icons.local_shipping_outlined),
+                        title: Text(
+                            '${order['gallons_requested']} gallons - order #${order['id']}'),
+                        subtitle: Text(_nameFor(order['customer_id'] as String)),
+                        trailing: FilledButton(
+                          onPressed: () => _promptRecordFromOrder(order),
+                          child: const Text('Record'),
+                        ),
+                      ),
+                    )),
                   ],
                   _SectionHeader("Today's recorded transactions"),
                   if (todayTx.isEmpty)

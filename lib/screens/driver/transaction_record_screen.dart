@@ -42,7 +42,7 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
   late final TextEditingController _locationController;
 
   int _quantity = 2;
-  String _waterType = 'mineral'; // Default to mineral
+  String _waterType = 'purified'; // only purified water is sold
   String _orderType = 'refill'; // 'refill' | 'exchange'
   String _status = 'Delivered - Paid';
   String _paymentType = 'Cash on Delivery';
@@ -814,22 +814,15 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
                   children: [
                     const Text('Water Type', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF64748B))),
                     const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      initialValue: _waterType,
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
-                      items: const [
-                        DropdownMenuItem(value: 'purified', child: Text('Purified', overflow: TextOverflow.ellipsis)),
-                        DropdownMenuItem(value: 'mineral', child: Text('Mineral', overflow: TextOverflow.ellipsis)),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) setState(() => _waterType = val);
-                      },
+                      child: const Text('Purified', style: TextStyle(fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
@@ -1038,70 +1031,70 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
             ),
             child: _proofPhoto != null
                 ? ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: Image.file(
-                            File(_proofPhoto!.path),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        Positioned(
-                          right: 8,
-                          top: 8,
-                          child: CircleAvatar(
-                            backgroundColor: Colors.black.withValues(alpha: 0.6),
-                            child: IconButton(
-                              icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
-                              onPressed: () => _takeProofPhoto(ImageSource.camera),
-                              tooltip: 'Retake Photo',
-                            ),
-                          ),
-                        ),
-                      ],
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Image.file(
+                      File(_proofPhoto!.path),
+                      fit: BoxFit.cover,
                     ),
-                  )
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.camera_alt_outlined, size: 36, color: Color(0xFF94A3B8)),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Capture Photo Proof of Delivery',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            ),
-                            onPressed: () => _takeProofPhoto(ImageSource.camera),
-                            icon: const Icon(Icons.camera_alt, size: 18),
-                            label: const Text('Camera', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          ),
-                          const SizedBox(width: 12),
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              side: const BorderSide(color: AppColors.primary),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            ),
-                            onPressed: () => _takeProofPhoto(ImageSource.gallery),
-                            icon: const Icon(Icons.photo_library, size: 18),
-                            label: const Text('Gallery', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          ),
-                        ],
-                      ),
-                    ],
                   ),
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: CircleAvatar(
+                      backgroundColor: Colors.black.withValues(alpha: 0.6),
+                      child: IconButton(
+                        icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+                        onPressed: () => _takeProofPhoto(ImageSource.camera),
+                        tooltip: 'Retake Photo',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+                : Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.camera_alt_outlined, size: 36, color: Color(0xFF94A3B8)),
+                const SizedBox(height: 8),
+                const Text(
+                  'Capture Photo Proof of Delivery',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                      onPressed: () => _takeProofPhoto(ImageSource.camera),
+                      icon: const Icon(Icons.camera_alt, size: 18),
+                      label: const Text('Camera', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    ),
+                    const SizedBox(width: 12),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                      onPressed: () => _takeProofPhoto(ImageSource.gallery),
+                      icon: const Icon(Icons.photo_library, size: 18),
+                      label: const Text('Gallery', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 24),
 
@@ -1119,14 +1112,14 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
               ),
               child: _isSubmitting
                   ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-                    )
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+              )
                   : const Text(
-                      'SUBMIT TRANSACTION RECORD',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 0.5),
-                    ),
+                'SUBMIT TRANSACTION RECORD',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+              ),
             ),
           ),
           const SizedBox(height: 24),

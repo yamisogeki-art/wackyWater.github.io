@@ -18,7 +18,15 @@ class DeliveryDetailsScreen extends StatefulWidget {
   final DeliveryStop stop;
   final DriverStopsController controller;
 
-  const DeliveryDetailsScreen({super.key, required this.stop, required this.controller});
+  /// When true, the camera for the proof-of-delivery photo opens right away.
+  final bool autoStartDelivered;
+
+  const DeliveryDetailsScreen({
+    super.key,
+    required this.stop,
+    required this.controller,
+    this.autoStartDelivered = false,
+  });
 
   @override
   State<DeliveryDetailsScreen> createState() => _DeliveryDetailsScreenState();
@@ -28,6 +36,16 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
   bool _saving = false;
   final ImagePicker _picker = ImagePicker();
   XFile? _proof;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoStartDelivered) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startMarkDelivered();
+      });
+    }
+  }
 
   DeliveryStop get _stop => widget.stop;
 
@@ -108,7 +126,7 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
 
   Future<void> _openCompleteDeliveryForm() async {
     final gallonsController = TextEditingController(text: _stop.gallons.toString());
-    const waterType = 'mineral'; // only mineral water is sold
+    const waterType = 'purified'; // only purified water is sold
     String orderType = _stop.orderType;
     String outcome = 'paid'; // 'paid' | 'credit'
     final priceController = TextEditingController(text: pricePerGallonFor(waterType).toStringAsFixed(2));
@@ -137,7 +155,7 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
                 const Text('Enter the actual delivery data below.',
                     style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                 const SizedBox(height: 16),
-                const Text('Water type: Mineral',
+                const Text('Water type: Purified',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 const SizedBox(height: 12),
                 const Text('Order type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),

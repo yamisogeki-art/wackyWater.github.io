@@ -1,9 +1,9 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../widgets/logout_confirm.dart';
 import '../../constants/auth_config.dart';
 import '../../services/forecast_service.dart';
-import '../../widgets/logout_confirm.dart';
 
 class ForecastScreen extends StatefulWidget {
   const ForecastScreen({super.key});
@@ -93,7 +93,11 @@ class _ForecastScreenState extends State<ForecastScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => logoutWithConfirmation(context),
+            onPressed: () async {
+              if (await confirmLogout(context)) {
+                await Supabase.instance.client.auth.signOut();
+              }
+            },
             tooltip: 'Sign out',
           ),
         ],
@@ -187,10 +191,10 @@ class _ForecastScreenState extends State<ForecastScreen> {
                         onPressed: _isGenerating ? null : _runNewForecastServer,
                         icon: _isGenerating
                             ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
                             : const Icon(Icons.flash_on),
                         label: Text(_isGenerating ? 'Running LightGBM Model...' : 'Run new forecast'),
                       ),
@@ -225,7 +229,7 @@ class _ForecastScreenState extends State<ForecastScreen> {
                         Expanded(
                           child: Text(
                             'Offline Mode: Displaying cached forecast'
-                            '${res.cachedAt != null ? ' (Saved: ${_formatShortDate(res.cachedAt!)})' : ''}.',
+                                '${res.cachedAt != null ? ' (Saved: ${_formatShortDate(res.cachedAt!)})' : ''}.',
                             style: TextStyle(fontSize: 12, color: Colors.amber.shade900, fontWeight: FontWeight.w600),
                           ),
                         ),
@@ -390,10 +394,10 @@ class _ForecastScreenState extends State<ForecastScreen> {
                   onPressed: _isGenerating ? null : _runNewForecastServer,
                   icon: _isGenerating
                       ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
                       : const Icon(Icons.refresh),
                   label: Text(_isGenerating ? 'Running LightGBM Model on Server...' : 'Run new forecast'),
                 ),

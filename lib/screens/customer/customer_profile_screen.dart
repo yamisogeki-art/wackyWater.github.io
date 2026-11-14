@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../theme/app_colors.dart';
 import '../../widgets/logout_confirm.dart';
+import '../../theme/app_colors.dart';
+import '../../utils/validators.dart';
 import 'household_info_screen.dart';
 import 'saved_locations_screen.dart';
 import 'track_order_screen.dart';
@@ -117,57 +119,61 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                Center(
-                  child: CircleAvatar(
-                    radius: 38,
-                    backgroundColor: AppColors.primaryLight,
-                    child: Text(
-                      name[0].toUpperCase(),
-                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.primary),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Center(child: Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-                if (_email != null)
-                  Center(child: Text(_email!, style: const TextStyle(color: AppColors.textMuted))),
-                const SizedBox(height: 24),
-                _tile(
-                  icon: Icons.home_work_outlined,
-                  title: 'Household Information',
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HouseholdInfoScreen())),
-                ),
-                _tile(
-                  icon: Icons.location_on_outlined,
-                  title: 'Delivery Locations',
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedLocationsScreen())),
-                ),
-                _tile(
-                  icon: Icons.pin_drop_outlined,
-                  title: 'Track My Order',
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TrackOrderScreen())),
-                ),
-                _tile(
-                  icon: Icons.phone_outlined,
-                  title: 'Contact Number',
-                  subtitle: _phone ?? 'Add a number so your driver can reach you',
-                  onTap: _editPhone,
-                ),
-                const SizedBox(height: 24),
-                OutlinedButton.icon(
-                  onPressed: () => logoutWithConfirmation(context),
-                  icon: const Icon(Icons.logout),
-                  label: const Text('LOGOUT'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red,
-                    side: const BorderSide(color: Colors.red),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                ),
-              ],
+        padding: const EdgeInsets.all(20),
+        children: [
+          Center(
+            child: CircleAvatar(
+              radius: 38,
+              backgroundColor: AppColors.primaryLight,
+              child: Text(
+                name[0].toUpperCase(),
+                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.primary),
+              ),
             ),
+          ),
+          const SizedBox(height: 12),
+          Center(child: Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
+          if (_email != null)
+            Center(child: Text(_email!, style: const TextStyle(color: AppColors.textMuted))),
+          const SizedBox(height: 24),
+          _tile(
+            icon: Icons.home_work_outlined,
+            title: 'Household Information',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HouseholdInfoScreen())),
+          ),
+          _tile(
+            icon: Icons.location_on_outlined,
+            title: 'Delivery Locations',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedLocationsScreen())),
+          ),
+          _tile(
+            icon: Icons.pin_drop_outlined,
+            title: 'Track My Order',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TrackOrderScreen())),
+          ),
+          _tile(
+            icon: Icons.phone_outlined,
+            title: 'Contact Number',
+            subtitle: _phone ?? 'Add a number so your driver can reach you',
+            onTap: _editPhone,
+          ),
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            onPressed: () async {
+              if (await confirmLogout(context)) {
+                await Supabase.instance.client.auth.signOut();
+              }
+            },
+            icon: const Icon(Icons.logout),
+            label: const Text('LOGOUT'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red,
+              side: const BorderSide(color: Colors.red),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../../widgets/logout_confirm.dart';
 import '../../constants/auth_config.dart';
 import '../../services/forecast_service.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/logout_confirm.dart';
 import 'admin_driver_map_screen.dart';
+import 'admin_driver_screen.dart';
 import 'customer_credit_screen.dart';
 import 'daily_transactions_screen.dart';
 import 'delivery_requests_screen.dart';
@@ -127,7 +127,11 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
           IconButton(
             tooltip: 'Sign out',
             icon: const Icon(Icons.logout),
-            onPressed: () => logoutWithConfirmation(context),
+            onPressed: () async {
+              if (await confirmLogout(context)) {
+                await Supabase.instance.client.auth.signOut();
+              }
+            },
           ),
         ],
       ),
@@ -200,6 +204,25 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildQuickCard(
+                      title: 'Drivers',
+                      subtitle: 'Create driver accounts',
+                      icon: Icons.person_add_alt_1_outlined,
+                      color: const Color(0xFF0D9488),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AdminDriversScreen()),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(child: SizedBox()),
+                ],
+              ),
             ],
           ),
         ),
@@ -252,10 +275,10 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                   IconButton(
                     icon: _isRefreshingForecast || snapshot.connectionState == ConnectionState.waiting
                         ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
                         : const Icon(Icons.refresh, color: Colors.white),
                     onPressed: _isRefreshingForecast ? null : _refreshForecast,
                     tooltip: 'Run server forecast',

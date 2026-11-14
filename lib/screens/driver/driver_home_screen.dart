@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../../widgets/logout_confirm.dart';
 import '../../services/driver_delivery_service.dart';
 import '../../services/driver_location_service.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/logout_confirm.dart';
 import '../../widgets/stop_badge.dart';
 import 'delivery_details_screen.dart';
 import 'driver_history_tab.dart';
@@ -68,10 +67,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   }
 
   Future<void> _logout() async {
-    if (await confirmLogout(context)) {
-      await _locationService.stop();
-      await Supabase.instance.client.auth.signOut();
-    }
+    if (!await confirmLogout(context)) return;
+    await _locationService.stop();
+    await Supabase.instance.client.auth.signOut();
   }
 
   Widget _drawer() {
@@ -315,6 +313,24 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                                 style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600),
                               ),
                           ],
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DeliveryDetailsScreen(
+                                  stop: stops[i],
+                                  controller: _stops,
+                                  autoStartDelivered: true,
+                                ),
+                              ),
+                            ),
+                            icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                            label: const Text('Confirm delivered (take photo)'),
+                          ),
                         ),
                       ],
                     ),
