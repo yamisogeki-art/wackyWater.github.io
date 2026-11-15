@@ -4,7 +4,6 @@ import '../../services/order_estimate_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/brand_header.dart';
 import '../../widgets/reminder_notification_card.dart';
-import '../kyc/kyc_gate.dart';
 import 'customer_profile_screen.dart';
 import 'household_info_screen.dart';
 import 'ml_training_screen.dart';
@@ -62,7 +61,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     // the Profile tab.
     final List<Widget> pages = [
       HomeDashboard(userName: _userProfile?['full_name'], isLoading: _isLoadingProfile),
-      const KycGate(child: OrderWaterScreen()),
+      const OrderWaterScreen(),
       const OrderHistoryScreen(),
       const CustomerProfileScreen(),
     ];
@@ -129,7 +128,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       daysUntil: estimate.daysUntil,
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const KycGate(child: OrderWaterScreen())),
+                        MaterialPageRoute(builder: (_) => const OrderWaterScreen()),
                       ),
                     ),
                   );
@@ -141,7 +140,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 title: 'Request Delivery',
                 subtitle: 'Order your water refill now',
                 icon: Icons.local_shipping,
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const KycGate(child: OrderWaterScreen()))),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderWaterScreen())),
               ),
               const SizedBox(height: 16),
               _buildActionCard(

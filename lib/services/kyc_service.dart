@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
@@ -10,6 +11,12 @@ class FaceCheckResult {
   final bool ok;
   final String message;
   const FaceCheckResult(this.ok, this.message);
+}
+
+class RegisterResult {
+  final bool ok;
+  final String message;
+  const RegisterResult(this.ok, this.message);
 }
 
 enum FaceChallenge { neutral, smile, idPhoto }
@@ -78,6 +85,45 @@ class KycService {
     } finally {
       await detector.close();
     }
+  }
+
+
+  // ---------------------------------------------------------------
+  // Registration: the server compares the neutral selfie, the smiling
+  // selfie and the ID photo, and creates the account only if all match.
+  // ---------------------------------------------------------------
+  static Future<RegisterResult> registerCustomer({
+    required String fullName,
+    required String email,
+    required String password,
+    required String idType,
+    required File idImage,
+    required File selfie,
+    required File smileSelfie,
+  }) async {
+    try {
+      final res = await _sb.functions.invoke('register-customer', body: {
+        'full_name': fullName,
+        'email': email,
+        'password': password,
+        'id_type': idType,
+        'id_image': base64Encode(await idImage.readAsBytes()),
+        'selfie': base64Encode(await selfie.readAsBytes()),
+        'selfie_smile': base64Encode(await smileSelfie.readAsBytes()),
+      });
+      if (res.status >= 200 && res.status < 300) return const RegisterResult(true, '');
+      return RegisterResult(false, _errorFrom(res.data));
+    } on FunctionException catch (e) {
+      return RegisterResult(false, _errorFrom(e.details));
+    } catch (_) {
+      return const RegisterResult(false, 'Could not reach the server. Check your connection and try again.');
+    }
+  }
+
+  static String _errorFrom(dynamic data) {
+    if (data is Map && data['error'] != null) return data['error'].toString();
+    if (data is String && data.isNotEmpty) return data;
+    return 'Registration failed. Please try again.';
   }
 
   // ---------------------------------------------------------------

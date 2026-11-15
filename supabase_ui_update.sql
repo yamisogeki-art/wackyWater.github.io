@@ -62,3 +62,12 @@ create policy "Authenticated users can read forecasts"
   on public.forecasts for select
   to authenticated
   using (true);
+
+-- 6) Rate-limiting table for register-customer Edge Function
+create table if not exists public.registration_attempts (
+  id uuid primary key default gen_random_uuid(),
+  ip text not null,
+  email text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.registration_attempts enable row level security;

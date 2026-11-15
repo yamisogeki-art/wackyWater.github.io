@@ -2,10 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../constants/auth_config.dart';
 import '../../services/kyc_service.dart';
-import '../../theme/app_colors.dart';
 import '../../utils/validators.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -16,6 +13,7 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  static const _primary = Color(0xFF0284C7);
   static const _idTypes = [
     'Philippine National ID (PhilSys)',
     "Driver's License",
@@ -33,17 +31,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmController = TextEditingController();
   final _picker = ImagePicker();
 
-  int _currentStep = 0; // 0: Account Info, 1: Valid ID Upload, 2: Face Selfies
+  int _step = 0; // 0 = account, 1 = ID, 2 = face
   bool _isLoading = false;
-  bool _isCheckingFace = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   String? _errorMessage;
 
-  // Step 2 & 3 KYC State
+  // KYC state
   String _idType = _idTypes.first;
-  File? _idFile;
-  File? _neutralSelfie;
+  File? _idImage;
+  File? _selfie;
   File? _smileSelfie;
 
   @override
@@ -52,9 +49,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordController.addListener(_onPasswordChanged);
   }
 
-  void _onPasswordChanged() {
-    setState(() {});
-  }
+  void _onPasswordChanged() => setState(() {});
 
   @override
   void dispose() {
@@ -71,32 +66,76 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool get _hasUppercase => _passwordController.text.contains(RegExp(r'[A-Z]'));
   bool get _hasLowercase => _passwordController.text.contains(RegExp(r'[a-z]'));
   bool get _hasNumber => _passwordController.text.contains(RegExp(r'[0-9]'));
-  bool get _hasSpecialChar => _passwordController.text.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
+  bool get _hasSpecialChar =>
+      _passwordController.text.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'));
 
   bool get _isPasswordStrong =>
       _hasMinLength && _hasUppercase && _hasLowercase && _hasNumber && _hasSpecialChar;
 
-  // On-Device Face Detection Checks
-  Future<void> _pickIdPhoto(ImageSource source) async {
-    final picked = await _picker.pickImage(source: source, maxWidth: 1920, imageQuality: 85);
+  // ---------------- Step navigation ----------------
+
+  void _nextFromAccount() {
+    if (!_formKey.currentState!.validate()) return;
+    if (!_isPasswordStrong) {
+      setState(() => _errorMessage =
+      'Please meet all strong password requirements before continuing.');
+      return;
+    }
+    setState(() {
+      _errorMessage = null;
+      _step = 1;
+    });
+  }
+
+  void _nextFromId() {
+    if (_idImage == null) {
+      setState(() => _errorMessage = 'Please upload a photo of your valid ID.');
+      return;
+    }
+    setState(() {
+      _errorMessage = null;
+      _step = 2;
+    });
+  }
+
+  void _back() {
+    if (_step == 0) {
+      Navigator.pop(context);
+    } else {
+      setState(() {
+        _errorMessage = null;
+        _step--;
+      });
+    }
+  }
+
+  // ---------------- KYC capture ----------------
+
+  Future<void> _pickId(ImageSource source) async {
+    final picked = await _picker.pickImage(
+      source: source,
+      maxWidth: 1920,
+      imageQuality: 85,
+    );
     if (picked == null) return;
 
     setState(() {
-      _isCheckingFace = true;
+      _isLoading = true;
       _errorMessage = null;
     });
 
     final file = File(picked.path);
     final result = await KycService.checkFace(file, FaceChallenge.idPhoto);
-    if (!mounted) return;
 
+    if (!mounted) return;
     setState(() {
-      _isCheckingFace = false;
+      _isLoading = false;
       if (result.ok) {
-        _idFile = file;
+        _idImage = file;
       } else {
-        _idFile = null;
-        _errorMessage = 'We could not detect a clear face on your ID. Retake with whole ID visible.';
+        _idImage = null;
+        _errorMessage =
+        'We could not find a clear face photo on your ID. Retake it with the whole ID visible and no glare.';
       }
     });
   }
@@ -111,19 +150,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (picked == null) return;
 
     setState(() {
-      _isCheckingFace = true;
+      _isLoading = true;
       _errorMessage = null;
     });
 
     final file = File(picked.path);
     final result = await KycService.checkFace(file, challenge);
-    if (!mounted) return;
 
+    if (!mounted) return;
     setState(() {
-      _isCheckingFace = false;
+      _isLoading = false;
       if (result.ok) {
         if (challenge == FaceChallenge.neutral) {
-          _neutralSelfie = file;
+          _selfie = file;
         } else {
           _smileSelfie = file;
         }
@@ -133,28 +172,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
   }
 
-  void _nextStep() {
-    setState(() => _errorMessage = null);
+  // ---------------- Register (faces must match the ID) ----------------
 
-    if (_currentStep == 0) {
-      if (!_formKey.currentState!.validate()) return;
-      if (!_isPasswordStrong) {
-        setState(() => _errorMessage = 'Please meet all password strength requirements before continuing.');
-        return;
-      }
-      setState(() => _currentStep = 1);
-    } else if (_currentStep == 1) {
-      if (_idFile == null) {
-        setState(() => _errorMessage = 'Please upload a photo of your valid government ID.');
-        return;
-      }
-      setState(() => _currentStep = 2);
-    }
-  }
-
-  Future<void> _submitRegistration() async {
-    if (_idFile == null || _neutralSelfie == null || _smileSelfie == null) {
-      setState(() => _errorMessage = 'Please complete your ID photo and both selfies before submitting.');
+  Future<void> _register() async {
+    if (_idImage == null || _selfie == null || _smileSelfie == null) {
+      setState(() => _errorMessage = 'Please add your ID and both face photos.');
       return;
     }
 
@@ -163,141 +185,80 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _errorMessage = null;
     });
 
-    try {
-      final response = await Supabase.instance.client.auth.signUp(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-        emailRedirectTo: appRedirectUrl,
-        data: {
-          'full_name': _nameController.text.trim(),
-          'role': 'customer',
-        },
-      );
+    // The server compares the neutral face, the smiling face and the ID photo,
+    // and only creates the account if all of them show the same person.
+    final result = await KycService.registerCustomer(
+      fullName: _nameController.text.trim(),
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+      idType: _idType,
+      idImage: _idImage!,
+      selfie: _selfie!,
+      smileSelfie: _smileSelfie!,
+    );
 
-      final user = response.user ?? Supabase.instance.client.auth.currentUser;
+    if (!mounted) return;
+    setState(() => _isLoading = false);
 
-      if (user != null && response.session != null) {
-        // Immediate Upload if session exists
-        await KycService.submit(
-          userId: user.id,
-          idType: _idType,
-          idImage: _idFile!,
-          selfie: _neutralSelfie!,
-          smileSelfie: _smileSelfie!,
-        );
-      } else {
-        // Save locally for upload upon email confirmation login (Flowchart Figure 1)
-        await KycService.savePending(
-          idType: _idType,
-          idImage: _idFile!,
-          selfie: _neutralSelfie!,
-          smileSelfie: _smileSelfie!,
-        );
-      }
+    if (!result.ok) {
+      setState(() => _errorMessage = result.message);
+      return;
+    }
 
-      if (!mounted) return;
-
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Column(
-            children: [
-              Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 64),
-              SizedBox(height: 12),
-              Text(
-                'Registration Submitted!',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-              ),
-            ],
-          ),
-          content: Text(
-            response.session == null
-                ? 'Your account and ID verification photos were saved successfully! Please check your email to confirm before logging in.'
-                : 'Welcome to Wacky Water! Your account and identity verification have been submitted for review.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14, color: Color(0xFF475569)),
-          ),
-          actions: [
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () {
-                  Navigator.pop(dialogContext);
-                  if (mounted) Navigator.pop(context);
-                },
-                child: const Text(
-                  'Continue to Login',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-              ),
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Column(
+          children: [
+            Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 64),
+            SizedBox(height: 12),
+            Text(
+              'Account Created!',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
             ),
           ],
         ),
-      );
-    } on AuthException catch (e) {
-      setState(() => _errorMessage = e.message);
-    } catch (e) {
-      setState(() => _errorMessage = 'Registration failed. Please check network connection.');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Widget _buildStepHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _stepIndicator(0, '1. Account'),
-          const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
-          _stepIndicator(1, '2. Valid ID'),
-          const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
-          _stepIndicator(2, '3. Selfies'),
+        content: const Text(
+          'Your face matched your ID. Welcome to Wacky Water! You can log in now.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 14, color: Color(0xFF475569)),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primary,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                if (mounted) Navigator.pop(context);
+              },
+              child: const Text(
+                'Continue to Login',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _stepIndicator(int step, String label) {
-    final active = _currentStep == step;
-    final done = _currentStep > step;
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 12,
-          backgroundColor: done
-              ? const Color(0xFF10B981)
-              : (active ? AppColors.primary : const Color(0xFFCBD5E1)),
-          child: done
-              ? const Icon(Icons.check, size: 14, color: Colors.white)
-              : Text(
-                  '${step + 1}',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: active ? FontWeight.bold : FontWeight.normal,
-            color: active ? AppColors.primary : const Color(0xFF64748B),
-          ),
-        ),
-      ],
+  // ---------------- UI helpers ----------------
+
+  InputDecoration _fieldDecoration(String label, IconData icon, {Widget? suffix}) {
+    return InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+      prefixIcon: Icon(icon),
+      filled: true,
+      fillColor: Colors.white,
+      suffixIcon: suffix,
     );
   }
 
@@ -325,89 +286,131 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _photoBox(File? f, String hint, IconData icon, double h) {
-    return Container(
-      height: h,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: f != null ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
-          width: f != null ? 2 : 1.5,
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: f != null
-          ? Image.file(f, fit: BoxFit.cover, width: double.infinity)
-          : Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 36, color: const Color(0xFF94A3B8)),
-                  const SizedBox(height: 6),
-                  Text(hint, style: const TextStyle(color: Color(0xFF64748B), fontSize: 13, fontWeight: FontWeight.w500)),
-                ],
+  Widget _stepIndicator() {
+    const labels = ['Account', 'ID', 'Face'];
+    return Row(
+      children: List.generate(3, (i) {
+        final active = i <= _step;
+        return Expanded(
+          child: Column(
+            children: [
+              Container(
+                height: 4,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                decoration: BoxDecoration(
+                  color: active ? _primary : const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
+              const SizedBox(height: 6),
+              Text(
+                labels[i],
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: active ? FontWeight.bold : FontWeight.normal,
+                  color: active ? _primary : const Color(0xFF94A3B8),
+                ),
+              ),
+            ],
+          ),
+        );
+      }),
     );
   }
 
-  Widget _buildStep0AccountInfo() {
+  Widget _photoBox({
+    required File? file,
+    required String placeholder,
+    required IconData icon,
+    double height = 180,
+  }) {
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: file != null ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+          width: file != null ? 2 : 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: file != null
+          ? Image.file(file, fit: BoxFit.cover, width: double.infinity)
+          : Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 40, color: const Color(0xFF94A3B8)),
+            const SizedBox(height: 8),
+            Text(placeholder,
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _primaryButton(String label, VoidCallback? onPressed) {
+    return SizedBox(
+      height: 52,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _primary,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        onPressed: _isLoading ? null : onPressed,
+        child: _isLoading
+            ? const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        )
+            : Text(label,
+            style: const TextStyle(
+                fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+      ),
+    );
+  }
+
+  // ---------------- Steps ----------------
+
+  Widget _accountStep() {
     return Form(
       key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Full Name
           TextFormField(
             controller: _nameController,
             textCapitalization: TextCapitalization.words,
             inputFormatters: [InputFormatters.lettersOnly],
-            decoration: const InputDecoration(
-              labelText: 'Full name',
-              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-              prefixIcon: Icon(Icons.person_outline),
-              filled: true,
-              fillColor: Colors.white,
-            ),
+            decoration: _fieldDecoration('Full name (as shown on your ID)', Icons.person_outline),
             validator: (v) => InputValidators.lettersOnly(v, fieldName: 'Full name'),
           ),
           const SizedBox(height: 16),
-
-          // Email
           TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Email address',
-              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-              prefixIcon: Icon(Icons.email_outlined),
-              filled: true,
-              fillColor: Colors.white,
-            ),
+            decoration: _fieldDecoration('Email address', Icons.email_outlined),
             validator: (v) => InputValidators.email(v),
           ),
           const SizedBox(height: 16),
-
-          // Password
           TextFormField(
             controller: _passwordController,
             obscureText: _obscurePassword,
-            decoration: InputDecoration(
-              labelText: 'Password',
-              border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-              prefixIcon: const Icon(Icons.lock_outline),
-              filled: true,
-              fillColor: Colors.white,
-              suffixIcon: IconButton(
-                icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+            decoration: _fieldDecoration(
+              'Password',
+              Icons.lock_outline,
+              suffix: IconButton(
+                icon: Icon(_obscurePassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined),
                 onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
               ),
             ),
             validator: (v) => InputValidators.password(v),
           ),
-
           if (_passwordController.text.isNotEmpty) ...[
             const SizedBox(height: 10),
             Container(
@@ -420,7 +423,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Password Strength Requirements:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                  const Text(
+                    'Password Strength Requirements:',
+                    style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
+                  ),
                   const SizedBox(height: 4),
                   _buildRequirementChip('At least 8 characters long', _hasMinLength),
                   _buildRequirementChip('Contains uppercase letter (A-Z)', _hasUppercase),
@@ -432,212 +439,146 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ],
           const SizedBox(height: 16),
-
-          // Confirm Password
           TextFormField(
             controller: _confirmController,
             obscureText: _obscureConfirmPassword,
-            decoration: InputDecoration(
-              labelText: 'Confirm password',
-              border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-              prefixIcon: const Icon(Icons.lock_outline),
-              filled: true,
-              fillColor: Colors.white,
-              suffixIcon: IconButton(
-                icon: Icon(_obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined),
-                onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+            decoration: _fieldDecoration(
+              'Confirm password',
+              Icons.lock_outline,
+              suffix: IconButton(
+                icon: Icon(_obscureConfirmPassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined),
+                onPressed: () =>
+                    setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
               ),
             ),
-            validator: (v) {
-              if (v != _passwordController.text) return 'Passwords do not match. Please try again.';
-              return null;
-            },
+            validator: (v) =>
+            v != _passwordController.text ? 'Passwords do not match. Please try again.' : null,
           ),
+          if (_errorMessage != null) _errorText(),
           const SizedBox(height: 24),
-          SizedBox(
-            height: 52,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: _nextStep,
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Next: Valid ID Photo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                  SizedBox(width: 8),
-                  Icon(Icons.arrow_forward, color: Colors.white, size: 18),
-                ],
-              ),
-            ),
-          ),
+          _primaryButton('Next: Upload ID', _nextFromAccount),
         ],
       ),
     );
   }
 
-  Widget _buildStep1ValidId() {
+  Widget _idStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          'Step 2: Upload Valid Government ID',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Select your ID type and photograph your valid government ID. Face must be clearly visible.',
-          style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+          'Upload a clear photo of a valid government-issued ID. Make sure all four corners are visible, the text is readable, and there is no glare.',
+          style: TextStyle(color: Color(0xFF475569), fontSize: 13),
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
           initialValue: _idType,
-          isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Government ID Type',
-            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-          items: _idTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, overflow: TextOverflow.ellipsis))).toList(),
+          decoration: _fieldDecoration('ID type', Icons.badge_outlined),
+          items: _idTypes
+              .map((t) => DropdownMenuItem(value: t, child: Text(t, overflow: TextOverflow.ellipsis)))
+              .toList(),
           onChanged: (v) => setState(() => _idType = v ?? _idType),
+          isExpanded: true,
         ),
         const SizedBox(height: 16),
-        _photoBox(_idFile, 'Photograph a valid ID with your face visible', Icons.credit_card, 160),
+        _photoBox(file: _idImage, placeholder: 'No ID photo yet', icon: Icons.credit_card),
         const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: _isCheckingFace ? null : () => _pickIdPhoto(ImageSource.camera),
-                icon: const Icon(Icons.camera_alt_outlined),
-                label: const Text('Take Photo'),
-                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12)),
+                onPressed: _isLoading ? null : () => _pickId(ImageSource.camera),
+                icon: const Icon(Icons.photo_camera_outlined),
+                label: const Text('Take photo'),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: _isCheckingFace ? null : () => _pickIdPhoto(ImageSource.gallery),
-                icon: const Icon(Icons.photo_library_outlined),
+                onPressed: _isLoading ? null : () => _pickId(ImageSource.gallery),
+                icon: const Icon(Icons.upload_file_outlined),
                 label: const Text('Upload'),
-                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12)),
               ),
             ),
           ],
         ),
+        if (_errorMessage != null) _errorText(),
         const SizedBox(height: 24),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => setState(() => _currentStep = 0),
-                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                child: const Text('Back'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: _isCheckingFace ? null : _nextStep,
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('Next: Selfies', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
-                    SizedBox(width: 6),
-                    Icon(Icons.arrow_forward, color: Colors.white, size: 18),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+        _primaryButton('Next: Face Verification', _nextFromId),
       ],
     );
   }
 
-  Widget _buildStep2Selfies() {
+  Widget _faceStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          'Step 3: Verification Selfies',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Take a neutral face selfie and a smiling selfie to verify your identity.',
-          style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+          'Take a neutral selfie and a smiling selfie. Your account is created only if both faces match the photo on your ID. Use good lighting, remove glasses/masks/hats, and look straight at the camera.',
+          style: TextStyle(color: Color(0xFF475569), fontSize: 13),
         ),
         const SizedBox(height: 16),
-
-        // 1. Neutral Face
-        const Text('1. Neutral Face Selfie', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-        const SizedBox(height: 6),
-        _photoBox(_neutralSelfie, 'Neutral Face Selfie', Icons.face_outlined, 140),
+        const Text('1. Neutral face',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+        const SizedBox(height: 8),
+        _photoBox(
+            file: _selfie, placeholder: 'Neutral selfie', icon: Icons.face_outlined, height: 160),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: _isCheckingFace ? null : () => _captureSelfie(FaceChallenge.neutral),
+          onPressed: _isLoading ? null : () => _captureSelfie(FaceChallenge.neutral),
           icon: const Icon(Icons.photo_camera_front_outlined),
-          label: Text(_neutralSelfie == null ? 'Take Neutral Selfie' : 'Retake Neutral Selfie'),
+          label: Text(_selfie == null ? 'Take selfie' : 'Retake'),
         ),
-
         const SizedBox(height: 16),
-
-        // 2. Smile Selfie
-        const Text('2. Smiling Selfie', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-        const SizedBox(height: 6),
-        _photoBox(_smileSelfie, 'Smiling Selfie', Icons.sentiment_satisfied_alt_outlined, 140),
+        const Text('2. Smile',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+        const SizedBox(height: 8),
+        _photoBox(
+            file: _smileSelfie,
+            placeholder: 'Smiling selfie',
+            icon: Icons.sentiment_satisfied_alt_outlined,
+            height: 160),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: _isCheckingFace ? null : () => _captureSelfie(FaceChallenge.smile),
+          onPressed: _isLoading ? null : () => _captureSelfie(FaceChallenge.smile),
           icon: const Icon(Icons.photo_camera_front_outlined),
-          label: Text(_smileSelfie == null ? 'Take Smiling Selfie' : 'Retake Smiling Selfie'),
+          label: Text(_smileSelfie == null ? 'Take selfie' : 'Retake'),
         ),
-
+        if (_errorMessage != null) _errorText(),
         const SizedBox(height: 24),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => setState(() => _currentStep = 1),
-                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                child: const Text('Back'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: (_isLoading || _isCheckingFace) ? null : _submitRegistration,
-                child: _isLoading
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('Create Account', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
-              ),
-            ),
-          ],
-        ),
+        _primaryButton('Create Account', _register),
       ],
+    );
+  }
+
+  Widget _errorText() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Text(
+        _errorMessage!,
+        style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w500),
+        textAlign: TextAlign.center,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final titles = ['Join Wacky Water', 'Verify Your ID', 'Face Verification'];
+    final subtitles = [
+      'Create a customer account to order water refills',
+      'Step 2 of 3: identity document',
+      'Step 3 of 3: confirm it is really you',
+    ];
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(title: const Text('Create Account')),
+      appBar: AppBar(
+        title: const Text('Create Account'),
+        leading: BackButton(onPressed: _isLoading ? null : _back),
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -646,68 +587,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.water_drop_rounded, size: 52, color: Color(0xFF0284C7)),
-                const SizedBox(height: 8),
+                _stepIndicator(),
+                const SizedBox(height: 20),
+                const Icon(Icons.water_drop_rounded, size: 56, color: _primary),
+                const SizedBox(height: 12),
                 Text(
-                  'Join Wacky Water',
+                  titles[_step],
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF0F172A),
-                      ),
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF0F172A),
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Customer Account & Identity Verification',
+                  subtitles[_step],
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xFF64748B),
-                      ),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: const Color(0xFF64748B)),
                 ),
-                const SizedBox(height: 16),
-                _buildStepHeader(),
-                const SizedBox(height: 20),
-
-                if (_isCheckingFace) ...[
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                        SizedBox(width: 10),
-                        Text('Checking photo with face detection...', style: TextStyle(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
+                const SizedBox(height: 24),
+                if (_step == 0) _accountStep(),
+                if (_step == 1) _idStep(),
+                if (_step == 2) _faceStep(),
+                const SizedBox(height: 14),
+                if (_step == 0)
+                  TextButton(
+                    onPressed: _isLoading ? null : () => Navigator.pop(context),
+                    child: const Text('Already have an account? Log in'),
                   ),
-                ],
-
-                if (_errorMessage != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFFCA5A5)),
-                    ),
-                    child: Text(
-                      _errorMessage!,
-                      style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 13, fontWeight: FontWeight.w500),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                if (_currentStep == 0) _buildStep0AccountInfo(),
-                if (_currentStep == 1) _buildStep1ValidId(),
-                if (_currentStep == 2) _buildStep2Selfies(),
-
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: _isLoading ? null : () => Navigator.pop(context),
-                  child: const Text('Already have an account? Log in'),
-                ),
               ],
             ),
           ),
