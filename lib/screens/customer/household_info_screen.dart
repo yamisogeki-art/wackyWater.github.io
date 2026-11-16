@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_inputs.dart';
@@ -46,7 +47,7 @@ class _HouseholdInfoScreenState extends State<HouseholdInfoScreen> {
   Future<void> _loadExisting() async {
     final customerId = Supabase.instance.client.auth.currentUser?.id;
     if (customerId == null) {
-      if (mounted) setState(() => _isLoading = false);
+      setState(() => _isLoading = false);
       return;
     }
     try {
@@ -56,29 +57,25 @@ class _HouseholdInfoScreenState extends State<HouseholdInfoScreen> {
           .eq('customer_id', customerId)
           .maybeSingle();
 
-      if (mounted) {
-        if (existing != null) {
-          final people = (existing['household_size'] as num?)?.toInt() ?? 0;
-          final consumption = (existing['avg_daily_consumption_liters'] as num?)?.toDouble() ?? 0.0;
-          final gallons = (existing['usual_gallons_per_order'] as num?)?.toInt() ?? 0;
+      if (existing != null && mounted) {
+        // Zeros mean "not filled in yet", so leave those fields empty.
+        final size = (existing['household_size'] as num?)?.toInt() ?? 0;
+        final liters = (existing['avg_daily_consumption_liters'] as num?)?.toDouble() ?? 0;
+        final gallons = (existing['usual_gallons_per_order'] as num?)?.toInt() ?? 0;
+        final freq = (existing['order_frequency_days'] as num?)?.toInt();
 
-          _peopleController.text = people >= 1 ? '$people' : '4';
-          _consumptionController.text = consumption > 0 ? '$consumption' : '10.0';
-          _gallonsController.text = gallons >= 1 ? '$gallons' : '2';
-          _frequencyDays = (existing['order_frequency_days'] as int?) ?? 7;
-        } else {
-          // Default realistic initial values for new customers (instead of 0, 0.0, 0)
-          _peopleController.text = '4';
-          _consumptionController.text = '10.0';
-          _gallonsController.text = '2';
+        if (size > 0) _peopleController.text = size.toString();
+        if (liters > 0) {
+          _consumptionController.text =
+          liters == liters.roundToDouble() ? liters.toInt().toString() : liters.toString();
+        }
+        if (gallons > 0) _gallonsController.text = gallons.toString();
+        if (freq != null && _frequencyOptions.contains(freq)) {
+          setState(() => _frequencyDays = freq);
         }
       }
     } catch (_) {
-      if (mounted) {
-        _peopleController.text = '4';
-        _consumptionController.text = '10.0';
-        _gallonsController.text = '2';
-      }
+      // No existing row yet is expected for a first-time save.
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -127,92 +124,89 @@ class _HouseholdInfoScreenState extends State<HouseholdInfoScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Please provide your household details',
-                      style: TextStyle(fontSize: 15, color: AppColors.textMuted),
-                    ),
-                    const SizedBox(height: 22),
-                    _buildField(
-                      label: 'Number of People in House',
-                      controller: _peopleController,
-                      hint: '4',
-                      keyboardType: TextInputType.number,
-                      min: 1.0,
-                    ),
-                    const SizedBox(height: 18),
-                    _buildField(
-                      label: 'Average Daily Water Consumption',
-                      controller: _consumptionController,
-                      hint: '10.0',
-                      suffixText: 'Liters',
-                      isDecimal: true,
-                      min: 0.1,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    ),
-                    const SizedBox(height: 18),
-                    const FieldLabel('How often do you order water?'),
-                    DropdownButtonFormField<int>(
-                      initialValue: _frequencyDays,
-                      decoration: outlinedField(),
-                      icon: const Icon(Icons.keyboard_arrow_down),
-                      items: _frequencyOptions
-                          .map((d) => DropdownMenuItem(value: d, child: Text('Every $d days')))
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) setState(() => _frequencyDays = val);
-                      },
-                    ),
-                    const SizedBox(height: 18),
-                    _buildField(
-                      label: 'Gallons per Order (usually)',
-                      controller: _gallonsController,
-                      hint: '2',
-                      keyboardType: TextInputType.number,
-                      min: 1.0,
-                    ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: _isSaving ? null : _saveInfo,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: _isSaving
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                              )
-                            : const Text(
-                                'SAVE INFORMATION',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                      ),
-                    ),
-                  ],
+        padding: const EdgeInsets.all(24.0),
+        child: Form(
+          key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Please provide your household details',
+                style: TextStyle(fontSize: 15, color: AppColors.textMuted),
+              ),
+              const SizedBox(height: 22),
+              _buildField(
+                label: 'Number of People in House',
+                what: 'the number of people in your house',
+                controller: _peopleController,
+                hint: 'e.g. 5',
+              ),
+              const SizedBox(height: 18),
+              _buildField(
+                label: 'Average Daily Water Consumption',
+                what: 'your daily water use in liters',
+                controller: _consumptionController,
+                hint: 'e.g. 20',
+                suffixText: 'Liters',
+                isDecimal: true,
+              ),
+              const SizedBox(height: 18),
+              const FieldLabel('How often do you order water?'),
+              DropdownButtonFormField<int>(
+                value: _frequencyDays,
+                decoration: outlinedField(),
+                icon: const Icon(Icons.keyboard_arrow_down),
+                items: _frequencyOptions
+                    .map((d) => DropdownMenuItem(value: d, child: Text('Every $d days')))
+                    .toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => _frequencyDays = val);
+                },
+              ),
+              const SizedBox(height: 18),
+              _buildField(
+                label: 'Gallons per Order (usually)',
+                what: 'how many gallons you usually order',
+                controller: _gallonsController,
+                hint: 'e.g. 5',
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _isSaving ? null : _saveInfo,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
+                      : const Text(
+                    'SAVE INFORMATION',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildField({
     required String label,
+    required String what,
     required TextEditingController controller,
     required String hint,
     String? suffixText,
-    TextInputType? keyboardType,
     bool isDecimal = false,
-    double min = 1.0,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -220,18 +214,24 @@ class _HouseholdInfoScreenState extends State<HouseholdInfoScreen> {
         FieldLabel(label),
         TextFormField(
           controller: controller,
-          keyboardType: keyboardType ?? (isDecimal ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.number),
-          inputFormatters: [isDecimal ? InputFormatters.decimal : InputFormatters.numbersOnly],
+          keyboardType: isDecimal
+              ? const TextInputType.numberWithOptions(decimal: true)
+              : TextInputType.number,
+          inputFormatters: [
+            isDecimal
+                ? FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))
+                : FilteringTextInputFormatter.digitsOnly,
+          ],
           decoration: outlinedField(hint: hint, suffixText: suffixText),
           validator: (v) {
+            final text = v?.trim() ?? '';
+            if (text.isEmpty) return 'Please enter $what';
             if (isDecimal) {
-              return InputValidators.decimalNumber(v, fieldName: label, min: min);
-            }
-            final req = InputValidators.numbersOnly(v, fieldName: label);
-            if (req != null) return req;
-            final val = int.tryParse(v!.trim()) ?? 0;
-            if (val < min.toInt()) {
-              return '$label (cannot be less than ${min.toInt()})';
+              final n = double.tryParse(text);
+              if (n == null || n <= 0) return 'Enter an amount greater than 0';
+            } else {
+              final n = int.tryParse(text);
+              if (n == null || n < 1) return 'Enter a number of 1 or more';
             }
             return null;
           },

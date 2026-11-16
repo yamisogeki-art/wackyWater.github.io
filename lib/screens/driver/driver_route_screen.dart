@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/driver_delivery_service.dart';
 import '../../services/osrm_service.dart';
 import '../../theme/app_colors.dart';
@@ -32,6 +35,12 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
   String _signature = '';
   int _selected = 0;
 
+  // Orders this driver delivered TODAY (shown as checkmark pins). Cleared every day.
+  List<_DeliveredPin> _delivered = [];
+  String _lastStopIds = '';
+  Timer? _midnightTimer;
+  Timer? _refreshTimer;
+
   DriverStopsController get _c => widget.controller;
 
   @override
@@ -39,12 +48,18 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
     super.initState();
     _c.addListener(_onControllerChanged);
     _signature = _signatureOf();
+    _lastStopIds = _c.stops.map((s) => s.id).join(',');
     _loadRoute();
+    _loadDelivered();
+    _scheduleMidnightReset();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 45), (_) => _loadDelivered());
   }
 
   @override
   void dispose() {
     _c.removeListener(_onControllerChanged);
+    _midnightTimer?.cancel();
+    _refreshTimer?.cancel();
     _map.dispose();
     super.dispose();
   }
@@ -56,6 +71,11 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
   }
 
   void _onControllerChanged() {
+    final ids = _c.stops.map((s) => s.id).join(',');
+    if (ids != _lastStopIds) {
+      _lastStopIds = ids;
+      _loadDelivered();
+    }
     final sig = _signatureOf();
     if (sig == _signature) return;
     _signature = sig;
@@ -115,6 +135,74 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
     }
   }
 
+  // ---- Daily checkmarks: orders this driver delivered today ----
+
+  DateTime _startOfToday() {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day);
+  }
+
+  Future<void> _loadDelivered() async {
+    final me = Supabase.instance.client.auth.currentUser?.id;
+    if (me == null) return;
+    try {
+      final rows = await Supabase.instance.client
+          .from('delivery_requests')
+          .select('id, delivered_at, customer_addresses(label, latitude, longitude)')
+          .eq('driver_id', me) // only this driver's own deliveries
+          .eq('status', 'delivered')
+          .gte('delivered_at', _startOfToday().toUtc().toIso8601String())
+          .order('delivered_at', ascending: false);
+
+      final pins = <_DeliveredPin>[];
+      for (final r in List<Map<String, dynamic>>.from(rows)) {
+        final a = r['customer_addresses'];
+        final lat = (a is Map ? a['latitude'] : null) as num?;
+        final lng = (a is Map ? a['longitude'] : null) as num?;
+        if (lat == null || lng == null) continue;
+        pins.add(_DeliveredPin(
+          id: r['id'].toString(),
+          label: ((a as Map)['label'] as String?) ?? 'Delivered',
+          point: LatLng(lat.toDouble(), lng.toDouble()),
+        ));
+      }
+      if (mounted) setState(() => _delivered = pins);
+    } catch (e) {
+      debugPrint('Could not load delivered pins: $e');
+    }
+  }
+
+  /// At midnight: clear yesterday's checkmarks and show the new day's assigned orders.
+  void _scheduleMidnightReset() {
+    _midnightTimer?.cancel();
+    final now = DateTime.now();
+    final nextMidnight = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    _midnightTimer = Timer(nextMidnight.difference(now) + const Duration(seconds: 2), () async {
+      if (!mounted) return;
+      setState(() {
+        _delivered = [];
+        _selected = 0;
+      });
+      await _c.refreshPosition();
+      await _loadDelivered();
+      await _loadRoute();
+      _scheduleMidnightReset();
+    });
+  }
+
+  Future<void> _confirmDelivered(DeliveryStop stop) async {
+    if (stop.status == 'assigned') await _c.markInTransit(stop.id);
+    if (!mounted) return;
+    // Opens the camera right away; the order is only marked delivered after the photo.
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DeliveryDetailsScreen(stop: stop, controller: _c, autoStartDelivered: true),
+      ),
+    );
+    _loadDelivered();
+  }
+
   Future<void> _startNavigation(DeliveryStop stop) async {
     if (stop.latLng == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -133,9 +221,11 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
   List<Marker> _markers() {
     final markers = <Marker>[];
     final stops = _c.stops;
+    final deliveredIds = _delivered.map((d) => d.id).toSet();
     for (var i = 0; i < stops.length; i++) {
       final ll = stops[i].latLng;
       if (ll == null) continue;
+      if (deliveredIds.contains(stops[i].id.toString())) continue;
       final selected = i == _selected;
       markers.add(
         Marker(
@@ -145,6 +235,27 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
           child: GestureDetector(
             onTap: () => setState(() => _selected = i),
             child: Center(child: StopBadge(index: i, size: selected ? 40 : 32)),
+          ),
+        ),
+      );
+    }
+    for (final d in _delivered) {
+      markers.add(
+        Marker(
+          point: d.point,
+          width: 44,
+          height: 44,
+          child: Tooltip(
+            message: d.label,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF16A34A),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 5)],
+              ),
+              child: const Icon(Icons.check, color: Colors.white, size: 24),
+            ),
           ),
         ),
       );
@@ -174,9 +285,14 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
     final stops = _c.stops;
     if (stops.isEmpty) {
       return _cardShell(
-        child: const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          child: Text('No active stops on your route right now.', textAlign: TextAlign.center),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            _delivered.isEmpty
+                ? 'No active stops on your route right now.'
+                : 'All assigned orders are delivered today (${_delivered.length}).',
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
@@ -188,10 +304,13 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => DeliveryDetailsScreen(stop: stop, controller: _c)),
-            ),
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => DeliveryDetailsScreen(stop: stop, controller: _c)),
+              );
+              _loadDelivered();
+            },
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Column(
@@ -222,19 +341,40 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton.icon(
-              onPressed: () => _startNavigation(stop),
-              icon: const Icon(Icons.navigation, size: 18),
-              label: const Text('Start Navigation', style: TextStyle(fontWeight: FontWeight.w700)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _startNavigation(stop),
+                    icon: const Icon(Icons.navigation, size: 18),
+                    label: const Text('Navigate', style: TextStyle(fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _confirmDelivered(stop),
+                    icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                    label: const Text('Delivered', style: TextStyle(fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF16A34A),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -301,6 +441,23 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
                   ],
                 ),
                 Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 8)],
+                    ),
+                    child: Text(
+                      'To deliver: ${_c.stops.where((s) => !_delivered.any((d) => d.id == s.id.toString())).length}'
+                          '   Delivered today: ${_delivered.length}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                Positioned(
                   left: 16,
                   right: 16,
                   bottom: 16,
@@ -313,4 +470,11 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
       ),
     );
   }
+}
+
+class _DeliveredPin {
+  final String id;
+  final String label;
+  final LatLng point;
+  const _DeliveredPin({required this.id, required this.label, required this.point});
 }
