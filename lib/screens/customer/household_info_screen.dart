@@ -46,7 +46,7 @@ class _HouseholdInfoScreenState extends State<HouseholdInfoScreen> {
   Future<void> _loadExisting() async {
     final customerId = Supabase.instance.client.auth.currentUser?.id;
     if (customerId == null) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
     try {
@@ -56,14 +56,29 @@ class _HouseholdInfoScreenState extends State<HouseholdInfoScreen> {
           .eq('customer_id', customerId)
           .maybeSingle();
 
-      if (existing != null && mounted) {
-        _peopleController.text = existing['household_size'].toString();
-        _consumptionController.text = existing['avg_daily_consumption_liters'].toString();
-        _gallonsController.text = existing['usual_gallons_per_order'].toString();
-        setState(() => _frequencyDays = existing['order_frequency_days'] as int);
+      if (mounted) {
+        if (existing != null) {
+          final people = (existing['household_size'] as num?)?.toInt() ?? 0;
+          final consumption = (existing['avg_daily_consumption_liters'] as num?)?.toDouble() ?? 0.0;
+          final gallons = (existing['usual_gallons_per_order'] as num?)?.toInt() ?? 0;
+
+          _peopleController.text = people >= 1 ? '$people' : '4';
+          _consumptionController.text = consumption > 0 ? '$consumption' : '10.0';
+          _gallonsController.text = gallons >= 1 ? '$gallons' : '2';
+          _frequencyDays = (existing['order_frequency_days'] as int?) ?? 7;
+        } else {
+          // Default realistic initial values for new customers (instead of 0, 0.0, 0)
+          _peopleController.text = '4';
+          _consumptionController.text = '10.0';
+          _gallonsController.text = '2';
+        }
       }
     } catch (_) {
-      // No existing row yet is expected for a first-time save.
+      if (mounted) {
+        _peopleController.text = '4';
+        _consumptionController.text = '10.0';
+        _gallonsController.text = '2';
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -126,21 +141,24 @@ class _HouseholdInfoScreenState extends State<HouseholdInfoScreen> {
                     _buildField(
                       label: 'Number of People in House',
                       controller: _peopleController,
-                      hint: '5',
+                      hint: '4',
                       keyboardType: TextInputType.number,
+                      min: 1.0,
                     ),
                     const SizedBox(height: 18),
                     _buildField(
                       label: 'Average Daily Water Consumption',
                       controller: _consumptionController,
-                      hint: '20',
+                      hint: '10.0',
                       suffixText: 'Liters',
+                      isDecimal: true,
+                      min: 0.1,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     ),
                     const SizedBox(height: 18),
                     const FieldLabel('How often do you order water?'),
                     DropdownButtonFormField<int>(
-                      value: _frequencyDays,
+                      initialValue: _frequencyDays,
                       decoration: outlinedField(),
                       icon: const Icon(Icons.keyboard_arrow_down),
                       items: _frequencyOptions
@@ -154,8 +172,9 @@ class _HouseholdInfoScreenState extends State<HouseholdInfoScreen> {
                     _buildField(
                       label: 'Gallons per Order (usually)',
                       controller: _gallonsController,
-                      hint: '5',
+                      hint: '2',
                       keyboardType: TextInputType.number,
+                      min: 1.0,
                     ),
                     const SizedBox(height: 32),
                     SizedBox(
@@ -193,6 +212,7 @@ class _HouseholdInfoScreenState extends State<HouseholdInfoScreen> {
     String? suffixText,
     TextInputType? keyboardType,
     bool isDecimal = false,
+    double min = 1.0,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,9 +225,15 @@ class _HouseholdInfoScreenState extends State<HouseholdInfoScreen> {
           decoration: outlinedField(hint: hint, suffixText: suffixText),
           validator: (v) {
             if (isDecimal) {
-              return InputValidators.decimalNumber(v, fieldName: label, min: 0.1);
+              return InputValidators.decimalNumber(v, fieldName: label, min: min);
             }
-            return InputValidators.numbersOnly(v, fieldName: label);
+            final req = InputValidators.numbersOnly(v, fieldName: label);
+            if (req != null) return req;
+            final val = int.tryParse(v!.trim()) ?? 0;
+            if (val < min.toInt()) {
+              return '$label (cannot be less than ${min.toInt()})';
+            }
+            return null;
           },
         ),
       ],

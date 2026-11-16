@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -91,6 +94,7 @@ class _SavedLocationsScreenState extends State<SavedLocationsScreen> {
       if (mounted) {
         setState(() => _pickedPoint = point);
         _mapController.move(point, 16);
+        _detectArea(point);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Color(0xFF10B981),
@@ -107,6 +111,90 @@ class _SavedLocationsScreenState extends State<SavedLocationsScreen> {
         );
       }
     }
+  }
+
+  // ---- Automatically find the barangay for the pinned point ----
+  int _detectToken = 0;
+  String? _areaHint;
+
+  String _norm(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp(r'\(.*?\)'), ' ')
+      .replaceAll(RegExp(r'[^a-z0-9 ]'), ' ')
+      .replaceAll(RegExp(r'\b(barangay|brgy)\b'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+
+  /// Matches names returned by the map service against the app's service areas.
+  String? _matchArea(List<String> candidates) {
+    for (final c in candidates) {
+      final nc = _norm(c);
+      if (nc.isEmpty) continue;
+      for (final area in serviceableAreas) {
+        if (_norm(area.toString()) == nc) return area.toString();
+      }
+    }
+    for (final c in candidates) {
+      final nc = _norm(c);
+      if (nc.length < 4) continue;
+      for (final area in serviceableAreas) {
+        final na = _norm(area.toString());
+        if (na.length >= 4 && (na.contains(nc) || nc.contains(na))) return area.toString();
+      }
+    }
+    return null;
+  }
+
+  Future<void> _detectArea(LatLng point) async {
+    final token = ++_detectToken;
+    setState(() => _areaHint = 'Detecting barangay...');
+
+    String? matched;
+    String? foundName;
+    try {
+      final client = HttpClient()
+        ..userAgent = 'com.wackysmart.app'
+        ..connectionTimeout = const Duration(seconds: 8);
+      final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
+        'format': 'jsonv2',
+        'lat': point.latitude.toString(),
+        'lon': point.longitude.toString(),
+        'zoom': '16',
+        'addressdetails': '1',
+        'accept-language': 'en',
+      });
+      final request = await client.getUrl(uri);
+      final response = await request.close().timeout(const Duration(seconds: 10));
+      final body = await response.transform(utf8.decoder).join();
+      client.close();
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(body) as Map<String, dynamic>;
+        final address = (data['address'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+        const keys = ['suburb', 'village', 'neighbourhood', 'quarter', 'hamlet', 'city_district', 'residential'];
+        final candidates = <String>[
+          for (final k in keys)
+            if (address[k] is String) address[k] as String,
+        ];
+        foundName = candidates.isEmpty ? null : candidates.first;
+        matched = _matchArea(candidates);
+      }
+    } catch (e) {
+      debugPrint('Barangay lookup failed: $e');
+    }
+
+    // Ignore the result if the user already moved the pin again.
+    if (!mounted || token != _detectToken) return;
+    setState(() {
+      if (matched != null) {
+        _selectedArea = matched;
+        _areaHint = 'Detected from your pinned location';
+      } else if (foundName != null) {
+        _areaHint = 'Detected "$foundName", which is not in the service list. Please choose your barangay.';
+      } else {
+        _areaHint = "Couldn't detect the barangay. Please choose it from the list.";
+      }
+    });
   }
 
   Future<void> _saveLocation() async {
@@ -143,6 +231,7 @@ class _SavedLocationsScreenState extends State<SavedLocationsScreen> {
       setState(() {
         _pickedPoint = null;
         _selectedArea = null;
+        _areaHint = null;
       });
     } catch (e) {
       if (mounted) {
@@ -175,6 +264,7 @@ class _SavedLocationsScreenState extends State<SavedLocationsScreen> {
                     initialZoom: 10.8,
                     onTap: (tapPosition, point) {
                       setState(() => _pickedPoint = point);
+                      _detectArea(point);
                     },
                   ),
                   children: [
@@ -208,12 +298,15 @@ class _SavedLocationsScreenState extends State<SavedLocationsScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
             child: DropdownButtonFormField<String>(
+              key: ValueKey(_selectedArea ?? ''),
               initialValue: _selectedArea,
               isExpanded: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Area / Barangay',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
                 isDense: true,
+                helperText: _areaHint,
+                helperMaxLines: 2,
               ),
               items: serviceableAreas
                   .map((area) => DropdownMenuItem(value: area, child: Text(area)))
@@ -241,10 +334,10 @@ class _SavedLocationsScreenState extends State<SavedLocationsScreen> {
                   onPressed: _isSaving ? null : _saveLocation,
                   child: _isSaving
                       ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                       : const Text('Save'),
                 ),
               ],
