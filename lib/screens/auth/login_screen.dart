@@ -76,10 +76,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
                   const BrandHeader(),
                   const SizedBox(height: 32),
-                  const Text(
-                    'Welcome Back!',
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.textDark),
-                  ),
                   const SizedBox(height: 20),
                   const FieldLabel('Email'),
                   TextFormField(
