@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/order_estimate_service.dart';
+import '../../widgets/announcement_banner.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/brand_header.dart';
 import '../../widgets/reminder_notification_card.dart';
@@ -115,6 +116,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 widget.isLoading ? 'Loading...' : 'Welcome Back, ${widget.userName ?? 'Customer'}!',
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
+              const SizedBox(height: 12),
+              const AnnouncementBanner(),
               FutureBuilder<OrderEstimate?>(
                 future: _estimateFuture,
                 builder: (context, snapshot) {
@@ -185,13 +188,13 @@ class _HomeDashboardState extends State<HomeDashboard> {
   }
 
   Widget _buildActionCard(
-      BuildContext context, {
-        required String title,
-        required String subtitle,
-        required IconData icon,
-        required VoidCallback onTap,
-        Color color = AppColors.primary,
-      }) {
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+    Color color = AppColors.primary,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),

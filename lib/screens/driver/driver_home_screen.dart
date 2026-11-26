@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../widgets/logout_confirm.dart';
+import '../../widgets/confirm_logout.dart';
 
 import '../../services/driver_delivery_service.dart';
 import '../../services/driver_location_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/stop_badge.dart';
 import 'delivery_details_screen.dart';
+import 'emergency_report_sheet.dart';
 import 'driver_history_tab.dart';
 import 'driver_profile_tab.dart';
 import 'driver_route_screen.dart';
@@ -353,6 +354,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       appBar: AppBar(
         title: const Text('Daily Driver Deliveries'),
         actions: [
+          IconButton(
+            tooltip: 'Report an emergency',
+            icon: const Icon(Icons.warning_amber_rounded, color: Colors.amberAccent),
+            onPressed: () => showEmergencyReportSheet(context),
+          ),
           AnimatedBuilder(
             animation: _stops,
             builder: (context, _) => IconButton(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'emergency_report_sheet.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../constants/pricing.dart';
@@ -12,7 +13,7 @@ import 'delivery_completed_screen.dart';
 
 /// Delivery Details (driver): who, what, where, plus the "Mark as
 /// Delivered" action. Marking a delivery done still records the real sale
-/// (order type, quantity, price, paid or credit) in the bottom sheet
+/// (order type, quantity, price; cash only) in the bottom sheet
 /// before showing the "Delivery Completed!" screen.
 class DeliveryDetailsScreen extends StatefulWidget {
   final DeliveryStop stop;
@@ -128,8 +129,9 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
     final gallonsController = TextEditingController(text: _stop.gallons.toString());
     const waterType = 'purified'; // only purified water is sold
     String orderType = _stop.orderType;
-    String outcome = 'paid'; // 'paid' | 'credit'
     final priceController = TextEditingController(text: pricePerGallonFor(waterType).toStringAsFixed(2));
+    String? gallonsError;
+    String? priceError;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -179,8 +181,12 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
                     Expanded(
                       child: TextField(
                         controller: gallonsController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Quantity (gallons)'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,1}'))],
+                        onChanged: (_) {
+                          if (gallonsError != null) setSheetState(() => gallonsError = null);
+                        },
+                        decoration: InputDecoration(labelText: 'Quantity (gallons)', errorText: gallonsError),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -188,54 +194,59 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
                       child: TextField(
                         controller: priceController,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(labelText: 'Price/gal (₱)'),
+                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
+                        onChanged: (_) {
+                          if (priceError != null) setSheetState(() => priceError = null);
+                        },
+                        decoration: InputDecoration(labelText: 'Price/gal (₱)', errorText: priceError),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                const Text('Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ChoiceChip(
-                        label: const Text('Delivered - Paid'),
-                        selected: outcome == 'paid',
-                        selectedColor: AppColors.statusDelivered,
-                        labelStyle: TextStyle(color: outcome == 'paid' ? Colors.white : Colors.black87),
-                        showCheckmark: false,
-                        onSelected: (_) => setSheetState(() => outcome = 'paid'),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCFCE7),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.payments_outlined, color: Color(0xFF15803D), size: 18),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Cash payment on delivery (paid in full)',
+                          style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF15803D), fontSize: 12.5),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ChoiceChip(
-                        label: const Text('Delivered - Credit'),
-                        selected: outcome == 'credit',
-                        selectedColor: AppColors.statusCredit,
-                        labelStyle: TextStyle(color: outcome == 'credit' ? Colors.white : Colors.black87),
-                        showCheckmark: false,
-                        onSelected: (_) => setSheetState(() => outcome = 'credit'),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
                     onPressed: () async {
-                      final gallons = double.tryParse(gallonsController.text) ?? 0;
-                      final price = double.tryParse(priceController.text) ?? pricePerGallonFor(waterType);
-                      if (gallons <= 0) return;
+                      final gallons = double.tryParse(gallonsController.text.trim());
+                      final price = double.tryParse(priceController.text.trim());
+                      final gErr = (gallons == null || gallons <= 0) ? 'Enter at least 1 gallon' : null;
+                      final pErr = (price == null || price <= 0) ? 'Enter a price above 0' : null;
+                      if (gErr != null || pErr != null) {
+                        setSheetState(() {
+                          gallonsError = gErr;
+                          priceError = pErr;
+                        });
+                        return;
+                      }
                       Navigator.pop(sheetContext);
                       await _completeDelivery(
-                        gallons: gallons,
-                        pricePerGallon: price,
+                        gallons: gallons!,
+                        pricePerGallon: price!,
                         waterType: waterType,
                         orderType: orderType,
-                        paidInFull: outcome == 'paid',
+                        paidInFull: true, // cash only
                       );
                     },
                     child: const Text('Save & Mark Delivered'),
@@ -357,7 +368,16 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
       data: AppTheme.driverTheme,
       child: Scaffold(
         backgroundColor: const Color(0xFFFAFBFD),
-        appBar: AppBar(title: const Text('Delivery Details')),
+        appBar: AppBar(
+          title: const Text('Delivery Details'),
+          actions: [
+            IconButton(
+              tooltip: 'Report a problem with this delivery',
+              icon: const Icon(Icons.warning_amber_rounded, color: Colors.amberAccent),
+              onPressed: () => showEmergencyReportSheet(context, deliveryRequestId: widget.stop.id),
+            ),
+          ],
+        ),
         body: SafeArea(
           child: Column(
             children: [

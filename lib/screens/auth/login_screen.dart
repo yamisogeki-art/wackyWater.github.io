@@ -5,7 +5,6 @@ import '../../widgets/app_inputs.dart';
 import '../../widgets/brand_header.dart';
 import '../../services/kyc_service.dart';
 import '../../utils/validators.dart';
-import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -76,6 +75,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
                   const BrandHeader(),
                   const SizedBox(height: 32),
+                  const Text(
+                    'Welcome Back!',
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.textDark),
+                  ),
                   const SizedBox(height: 20),
                   const FieldLabel('Email'),
                   TextFormField(
@@ -107,9 +110,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: TextButton(
                       style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Password reset isn't set up yet - contact admin to reset your password."),
+                          ),
                         );
                       },
                       child: const Text('Forgot Password?', style: TextStyle(color: AppColors.primary, fontSize: 13)),
@@ -135,10 +139,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: _isLoading ? null : _signIn,
                       child: _isLoading
                           ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                      )
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            )
                           : const Text('LOGIN', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                     ),
                   ),

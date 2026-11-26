@@ -334,10 +334,10 @@ class _SavedLocationsScreenState extends State<SavedLocationsScreen> {
                   onPressed: _isSaving ? null : _saveLocation,
                   child: _isSaving
                       ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Text('Save'),
                 ),
               ],

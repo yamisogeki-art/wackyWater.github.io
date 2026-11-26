@@ -452,7 +452,7 @@ class _DriverRouteScreenState extends State<DriverRouteScreen> {
                     ),
                     child: Text(
                       'To deliver: ${_c.stops.where((s) => !_delivered.any((d) => d.id == s.id.toString())).length}'
-                          '   Delivered today: ${_delivered.length}',
+                      '   Delivered today: ${_delivered.length}',
                       style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                     ),
                   ),

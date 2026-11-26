@@ -57,7 +57,11 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
         '${now.day.toString().padLeft(2, '0')}';
   }
 
-  String _nameFor(String customerId) {
+  String _nameFor(String? customerId, [String? walkInName]) {
+    if (customerId == null) {
+      final n = walkInName?.trim();
+      return (n != null && n.isNotEmpty) ? '$n (walk-in)' : 'Walk-in customer';
+    }
     final match = _customers.where((c) => c['id'] == customerId);
     if (match.isEmpty) return customerId.substring(0, 8);
     final name = match.first['full_name'] as String?;
@@ -74,8 +78,9 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
       'gallons': gallons,
       'price_per_gallon': pricePerGallon,
       'water_type': waterType,
-      'amount_paid': 0,
-      'status': 'unpaid',
+      'amount_paid': gallons * pricePerGallon, // cash on delivery, paid in full
+      'status': 'paid',
+      'payment_method': 'cod',
     });
     await _syncDailyAggregate(gallons);
   }
@@ -95,7 +100,7 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
     } catch (e) {
       // Don't block the transaction record on this - surface it, but
       // the customer_transactions row (the source of truth for
-      // billing/credit) is already saved either way.
+      // sales record) is already saved either way.
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Recorded, but forecast data sync failed: $e')),
@@ -108,19 +113,18 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
     required String customerId,
     required double gallons,
     required double pricePerGallon,
-    required double amountPaid,
     required String waterType,
   }) async {
     final due = gallons * pricePerGallon;
-    final status = amountPaid <= 0 ? 'unpaid' : (amountPaid < due ? 'partial' : 'paid');
     await Supabase.instance.client.from('customer_transactions').insert({
       'customer_id': customerId,
       'transaction_date': _todayStr(),
       'gallons': gallons,
       'price_per_gallon': pricePerGallon,
       'water_type': waterType,
-      'amount_paid': amountPaid,
-      'status': status,
+      'amount_paid': due, // cash on delivery, paid in full
+      'status': 'paid',
+      'payment_method': 'cod',
     });
     await _syncDailyAggregate(gallons);
   }
@@ -177,7 +181,6 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
     String waterType = 'purified';
     final gallonsController = TextEditingController();
     final priceController = TextEditingController(text: _priceFor(waterType).toStringAsFixed(2));
-    final paidController = TextEditingController(text: '0');
 
     await showDialog<void>(
       context: context,
@@ -197,9 +200,9 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
                   ),
                   items: _customers
                       .map((c) => DropdownMenuItem<String>(
-                    value: c['id'] as String,
-                    child: Text(_nameFor(c['id'] as String)),
-                  ))
+                            value: c['id'] as String,
+                            child: Text(_nameFor(c['id'] as String)),
+                          ))
                       .toList(),
                   onChanged: (v) {
                     if (v != null) setDialogState(() => selectedCustomerId = v);
@@ -223,16 +226,6 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
                     border: OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: paidController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Amount paid now (₱)',
-                    border: OutlineInputBorder(),
-                    helperText: 'Leave as 0 to add the full amount to their credit',
-                  ),
-                ),
               ],
             ),
           ),
@@ -246,12 +239,10 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
                 final gallons = double.tryParse(gallonsController.text) ?? 0;
                 if (gallons <= 0) return;
                 final price = double.tryParse(priceController.text) ?? _priceFor(waterType);
-                final paid = double.tryParse(paidController.text) ?? 0;
                 await _recordManual(
                   customerId: selectedCustomerId,
                   gallons: gallons,
                   pricePerGallon: price,
-                  amountPaid: paid,
                   waterType: waterType,
                 );
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
@@ -295,11 +286,11 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
               // still need to be reconciled into today's record.
               final pendingOrders = (orderSnapshot.data ?? [])
                   .where((o) =>
-              o['status'] == 'delivered' && !recordedOrderIds.contains(o['id']))
+                      o['status'] == 'delivered' && !recordedOrderIds.contains(o['id']))
                   .toList();
 
               final todayTx =
-              transactions.where((t) => t['transaction_date'] == _todayStr()).toList();
+                  transactions.where((t) => t['transaction_date'] == _todayStr()).toList();
 
               return ListView(
                 padding: const EdgeInsets.only(bottom: 96, top: 8),
@@ -307,19 +298,19 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
                   if (pendingOrders.isNotEmpty) ...[
                     const _SectionHeader('Delivered orders to record'),
                     ...pendingOrders.map((order) => Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      color: Colors.amber.shade50,
-                      child: ListTile(
-                        leading: const Icon(Icons.local_shipping_outlined),
-                        title: Text(
-                            '${order['gallons_requested']} gallons - order #${order['id']}'),
-                        subtitle: Text(_nameFor(order['customer_id'] as String)),
-                        trailing: FilledButton(
-                          onPressed: () => _promptRecordFromOrder(order),
-                          child: const Text('Record'),
-                        ),
-                      ),
-                    )),
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                          color: Colors.amber.shade50,
+                          child: ListTile(
+                            leading: const Icon(Icons.local_shipping_outlined),
+                            title: Text(
+                                '${order['gallons_requested']} gallons - order #${order['id']}'),
+                            subtitle: Text(_nameFor(order['customer_id'] as String)),
+                            trailing: FilledButton(
+                              onPressed: () => _promptRecordFromOrder(order),
+                              child: const Text('Record'),
+                            ),
+                          ),
+                        )),
                   ],
                   _SectionHeader("Today's recorded transactions"),
                   if (todayTx.isEmpty)
@@ -341,7 +332,7 @@ class _DailyTransactionsScreenState extends State<DailyTransactionsScreen> {
                             color: status == 'paid' ? Colors.green : Colors.orange,
                           ),
                           title: Text(
-                              '${_nameFor(t['customer_id'] as String)} - ${t['gallons']} gal @ ₱${t['price_per_gallon']}'),
+                              '${_nameFor(t['customer_id'] as String?, t['customer_name'] as String?)} - ${t['gallons']} gal @ ₱${t['price_per_gallon']}'),
                           subtitle: Text(
                               'Due ₱${due.toStringAsFixed(2)} - paid ₱${paid.toStringAsFixed(2)} ($status)'),
                         ),

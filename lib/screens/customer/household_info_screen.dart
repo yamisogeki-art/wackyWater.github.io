@@ -67,7 +67,7 @@ class _HouseholdInfoScreenState extends State<HouseholdInfoScreen> {
         if (size > 0) _peopleController.text = size.toString();
         if (liters > 0) {
           _consumptionController.text =
-          liters == liters.roundToDouble() ? liters.toInt().toString() : liters.toString();
+              liters == liters.roundToDouble() ? liters.toInt().toString() : liters.toString();
         }
         if (gallons > 0) _gallonsController.text = gallons.toString();
         if (freq != null && _frequencyOptions.contains(freq)) {
@@ -124,79 +124,79 @@ class _HouseholdInfoScreenState extends State<HouseholdInfoScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Form(
-          key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Please provide your household details',
-                style: TextStyle(fontSize: 15, color: AppColors.textMuted),
-              ),
-              const SizedBox(height: 22),
-              _buildField(
-                label: 'Number of People in House',
-                what: 'the number of people in your house',
-                controller: _peopleController,
-                hint: 'e.g. 5',
-              ),
-              const SizedBox(height: 18),
-              _buildField(
-                label: 'Average Daily Water Consumption',
-                what: 'your daily water use in liters',
-                controller: _consumptionController,
-                hint: 'e.g. 20',
-                suffixText: 'Liters',
-                isDecimal: true,
-              ),
-              const SizedBox(height: 18),
-              const FieldLabel('How often do you order water?'),
-              DropdownButtonFormField<int>(
-                value: _frequencyDays,
-                decoration: outlinedField(),
-                icon: const Icon(Icons.keyboard_arrow_down),
-                items: _frequencyOptions
-                    .map((d) => DropdownMenuItem(value: d, child: Text('Every $d days')))
-                    .toList(),
-                onChanged: (val) {
-                  if (val != null) setState(() => _frequencyDays = val);
-                },
-              ),
-              const SizedBox(height: 18),
-              _buildField(
-                label: 'Gallons per Order (usually)',
-                what: 'how many gallons you usually order',
-                controller: _gallonsController,
-                hint: 'e.g. 5',
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _isSaving ? null : _saveInfo,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: _isSaving
-                      ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                  )
-                      : const Text(
-                    'SAVE INFORMATION',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+              padding: const EdgeInsets.all(24.0),
+              child: Form(
+                key: _formKey,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Please provide your household details',
+                      style: TextStyle(fontSize: 15, color: AppColors.textMuted),
+                    ),
+                    const SizedBox(height: 22),
+                    _buildField(
+                      label: 'Number of People in House',
+                      what: 'the number of people in your house',
+                      controller: _peopleController,
+                      hint: 'e.g. 5',
+                    ),
+                    const SizedBox(height: 18),
+                    _buildField(
+                      label: 'Average Daily Water Consumption',
+                      what: 'your daily water use in liters',
+                      controller: _consumptionController,
+                      hint: 'e.g. 20',
+                      suffixText: 'Liters',
+                      isDecimal: true,
+                    ),
+                    const SizedBox(height: 18),
+                    const FieldLabel('How often do you order water?'),
+                    DropdownButtonFormField<int>(
+                      value: _frequencyDays,
+                      decoration: outlinedField(),
+                      icon: const Icon(Icons.keyboard_arrow_down),
+                      items: _frequencyOptions
+                          .map((d) => DropdownMenuItem(value: d, child: Text('Every $d days')))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) setState(() => _frequencyDays = val);
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    _buildField(
+                      label: 'Gallons per Order (usually)',
+                      what: 'how many gallons you usually order',
+                      controller: _gallonsController,
+                      hint: 'e.g. 5',
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _isSaving ? null : _saveInfo,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: _isSaving
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Text(
+                                'SAVE INFORMATION',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 

@@ -33,9 +33,9 @@ class KycService {
   // challenges. It does NOT compare the selfie to the ID photo.
   // ---------------------------------------------------------------
   static Future<FaceCheckResult> checkFace(
-      File image,
-      FaceChallenge challenge,
-      ) async {
+    File image,
+    FaceChallenge challenge,
+  ) async {
     final detector = FaceDetector(
       options: FaceDetectorOptions(
         enableClassification: true, // smile + eyes open probabilities
@@ -46,7 +46,7 @@ class KycService {
 
     try {
       final faces =
-      await detector.processImage(InputImage.fromFile(image));
+          await detector.processImage(InputImage.fromFile(image));
 
       if (faces.isEmpty) {
         return const FaceCheckResult(false, 'No face detected. Try again in better light.');
@@ -139,11 +139,11 @@ class KycService {
     Future<String> upload(File file, String name) async {
       final path = '$userId/$name.jpg';
       await _sb.storage.from(_bucket).upload(
-        path,
-        file,
-        fileOptions:
-        const FileOptions(upsert: true, contentType: 'image/jpeg'),
-      );
+            path,
+            file,
+            fileOptions:
+                const FileOptions(upsert: true, contentType: 'image/jpeg'),
+          );
       return path;
     }
 

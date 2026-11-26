@@ -18,10 +18,15 @@ class _DriverTransactionRecordsTabState extends State<DriverTransactionRecordsTa
   void initState() {
     super.initState();
     // Query transactions arranged by date from latest to oldest
-    _transactionsStream = Supabase.instance.client
-        .from('customer_transactions')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false);
+    // Only this driver's own sales (the database enforces this too)
+    final driverId = Supabase.instance.client.auth.currentUser?.id;
+    _transactionsStream = driverId == null
+        ? Stream.value(<Map<String, dynamic>>[])
+        : Supabase.instance.client
+            .from('customer_transactions')
+            .stream(primaryKey: ['id'])
+            .eq('driver_id', driverId)
+            .order('created_at', ascending: false);
   }
 
   Widget _summaryStatCard({
@@ -87,7 +92,6 @@ class _DriverTransactionRecordsTabState extends State<DriverTransactionRecordsTa
           double totalGallons = 0;
           double totalMoney = 0;
           double totalCOD = 0;
-          double totalGCash = 0;
 
           for (final tx in rawTransactions) {
             final gal = (tx['gallons'] as num?)?.toDouble() ?? 0.0;
@@ -97,15 +101,7 @@ class _DriverTransactionRecordsTabState extends State<DriverTransactionRecordsTa
             totalGallons += gal;
             totalMoney += paid;
 
-            final note = (tx['notes'] ?? '').toString().toLowerCase();
-            final paymentMethod = (tx['payment_method'] ?? '').toString().toLowerCase();
-
-            if (note.contains('gcash') || paymentMethod.contains('gcash')) {
-              totalGCash += paid;
-            } else {
-              // Defaults to COD or cash
-              totalCOD += paid;
-            }
+            totalCOD += paid; // cash only
           }
 
           return Column(
@@ -153,7 +149,7 @@ class _DriverTransactionRecordsTabState extends State<DriverTransactionRecordsTa
                       children: [
                         Expanded(
                           child: _summaryStatCard(
-                            title: 'COD Total',
+                            title: 'Cash Total',
                             value: '₱${totalCOD.toStringAsFixed(2)}',
                             icon: Icons.payments_outlined,
                             color: const Color(0xFFD97706),
@@ -163,9 +159,9 @@ class _DriverTransactionRecordsTabState extends State<DriverTransactionRecordsTa
                         const SizedBox(width: 8),
                         Expanded(
                           child: _summaryStatCard(
-                            title: 'GCash Total',
-                            value: '₱${totalGCash.toStringAsFixed(2)}',
-                            icon: Icons.account_balance_wallet_outlined,
+                            title: 'Sales Recorded',
+                            value: '${rawTransactions.length}',
+                            icon: Icons.receipt_long_outlined,
                             color: const Color(0xFF2563EB),
                             bgColor: const Color(0xFFEFF6FF),
                           ),
@@ -208,9 +204,7 @@ class _DriverTransactionRecordsTabState extends State<DriverTransactionRecordsTa
                             dateVal = DateTime.tryParse(dateRaw.toString()) ?? DateTime.now();
                           }
 
-                          final note = (tx['notes'] ?? '').toString();
-                          final isGCash = note.toLowerCase().contains('gcash');
-                          final paymentMethod = isGCash ? 'GCash' : 'Cash on Delivery (COD)';
+                          const paymentMethod = 'Cash on Delivery (COD)';
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),

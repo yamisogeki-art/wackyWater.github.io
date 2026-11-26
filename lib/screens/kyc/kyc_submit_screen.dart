@@ -104,21 +104,21 @@ class _KycSubmitScreenState extends State<KycSubmitScreen> {
   }
 
   Widget _photo(File? f, String hint, IconData icon, double h) => Container(
-    height: h,
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: f != null ? const Color(0xFF10B981) : const Color(0xFFE2E8F0), width: f != null ? 2 : 1),
-    ),
-    clipBehavior: Clip.antiAlias,
-    child: f != null
-        ? Image.file(f, fit: BoxFit.cover, width: double.infinity)
-        : Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 36, color: const Color(0xFF94A3B8)),
-      const SizedBox(height: 6),
-      Text(hint, style: const TextStyle(color: Color(0xFF64748B), fontSize: 13)),
-    ])),
-  );
+        height: h,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: f != null ? const Color(0xFF10B981) : const Color(0xFFE2E8F0), width: f != null ? 2 : 1),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: f != null
+            ? Image.file(f, fit: BoxFit.cover, width: double.infinity)
+            : Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Icon(icon, size: 36, color: const Color(0xFF94A3B8)),
+                const SizedBox(height: 6),
+                Text(hint, style: const TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+              ])),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -151,12 +151,12 @@ class _KycSubmitScreenState extends State<KycSubmitScreen> {
             const SizedBox(height: 8),
             Row(children: [
               Expanded(child: OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _pickId(ImageSource.camera),
-                  icon: const Icon(Icons.photo_camera_outlined), label: const Text('Take photo'))),
+                onPressed: _busy ? null : () => _pickId(ImageSource.camera),
+                icon: const Icon(Icons.photo_camera_outlined), label: const Text('Take photo'))),
               const SizedBox(width: 12),
               Expanded(child: OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _pickId(ImageSource.gallery),
-                  icon: const Icon(Icons.upload_file_outlined), label: const Text('Upload'))),
+                onPressed: _busy ? null : () => _pickId(ImageSource.gallery),
+                icon: const Icon(Icons.upload_file_outlined), label: const Text('Upload'))),
             ]),
             const SizedBox(height: 20),
             const Text('Neutral face', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -164,18 +164,18 @@ class _KycSubmitScreenState extends State<KycSubmitScreen> {
             _photo(_selfie, 'Neutral selfie', Icons.face_outlined, 150),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-                onPressed: _busy ? null : () => _selfieCapture(FaceChallenge.neutral),
-                icon: const Icon(Icons.photo_camera_front_outlined),
-                label: Text(_selfie == null ? 'Take selfie' : 'Retake')),
+              onPressed: _busy ? null : () => _selfieCapture(FaceChallenge.neutral),
+              icon: const Icon(Icons.photo_camera_front_outlined),
+              label: Text(_selfie == null ? 'Take selfie' : 'Retake')),
             const SizedBox(height: 16),
             const Text('Smile', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             _photo(_smile, 'Smiling selfie', Icons.sentiment_satisfied_alt_outlined, 150),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-                onPressed: _busy ? null : () => _selfieCapture(FaceChallenge.smile),
-                icon: const Icon(Icons.photo_camera_front_outlined),
-                label: Text(_smile == null ? 'Take selfie' : 'Retake')),
+              onPressed: _busy ? null : () => _selfieCapture(FaceChallenge.smile),
+              icon: const Icon(Icons.photo_camera_front_outlined),
+              label: Text(_smile == null ? 'Take selfie' : 'Retake')),
             if (_error != null) Padding(
               padding: const EdgeInsets.only(top: 14),
               child: Text(_error!, textAlign: TextAlign.center,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../widgets/announcement_banner.dart';
 import '../../constants/pricing.dart';
 import '../../theme/app_colors.dart';
 import 'order_success_screen.dart';
@@ -21,7 +22,7 @@ class OrderWaterScreen extends StatefulWidget {
 
 class _OrderWaterScreenState extends State<OrderWaterScreen> {
   int _gallons = 1;
-  String _waterType = 'mineral'; // 'purified' | 'mineral'
+  final String _waterType = 'purified'; // only purified water is sold
   String _orderType = 'refill'; // 'exchange' | 'refill'
   bool _isLoading = false;
   String _addressLabel = 'Select a delivery location';
@@ -147,18 +148,7 @@ class _OrderWaterScreenState extends State<OrderWaterScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text('Water Type', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        _typeChip(
-                          selected: _waterType == 'mineral',
-                          label: 'Mineral (₱${mineralPricePerGallon.toStringAsFixed(0)}/gal)',
-                          onTap: () => setState(() => _waterType = 'mineral'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
+                    const AnnouncementBanner(),
                     const Text('Exchange or Refill', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
                     const SizedBox(height: 8),
                     Row(

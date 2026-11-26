@@ -18,12 +18,14 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
+from zoneinfo import ZoneInfo
 
 import joblib
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Header, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from supabase import create_client
 
 # Environment configuration
@@ -31,10 +33,13 @@ ENV = os.environ.get("ENV", "development").lower()
 IS_PROD = ENV in ("production", "prod")
 API_SECRET_KEY = os.environ.get("API_SECRET_KEY", "wackysmart_secret_key_2025")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://hsrsuuyqqtyqeutcvorp.supabase.co")
-SUPABASE_SERVICE_KEY = os.environ.get(
-    "SUPABASE_SERVICE_KEY",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhzcnN1dXlxcXR5cWV1dGN2b3JwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwODQ4NzcsImV4cCI6MjEwMzY2MDg3N30.4S81Zzktm9RTD_HvqWT8LXXdBrtK4Znt3sa60uvLGYc"
-)
+# Must be the *service role* key, set only as an environment variable on the server.
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+
+MANILA = ZoneInfo("Asia/Manila")
+HISTORY_DAYS = 21          # days of history the model looks at
+MIN_HISTORY_ROWS = 14      # need at least this many recorded days
+MAX_STALE_DAYS = int(os.environ.get("FORECAST_MAX_STALE_DAYS", "7"))  # newest record may be at most this old
 
 # Global loaded model in-memory storage
 ml_model = None
@@ -63,6 +68,10 @@ async def lifespan(app: FastAPI):
             print("⚠️ Warning: Model file not found. Server will start, but /forecast requires model file.")
     except Exception as e:
         print(f"❌ Error loading LightGBM model: {e}")
+    if API_SECRET_KEY == "wackysmart_secret_key_2025":
+        print("⚠️ API_SECRET_KEY is still the public default. Set a new value in the host's environment.")
+    if not SUPABASE_SERVICE_KEY:
+        print("⚠️ SUPABASE_SERVICE_KEY is not set: /forecast cannot read or save data.")
     yield
     ml_model = None
 
@@ -100,14 +109,16 @@ request_counts: Dict[str, list] = {}
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    client_ip = request.client.host if request.client else "unknown"
+    forwarded = request.headers.get("x-forwarded-for", "")
+    client_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
     now = time.time()
 
     timestamps = [t for t in request_counts.get(client_ip, []) if now - t < RATE_LIMIT_WINDOW]
     if len(timestamps) >= MAX_REQUESTS_PER_WINDOW:
-        raise HTTPException(
+        request_counts[client_ip] = timestamps
+        return JSONResponse(
             status_code=429,
-            detail="Rate limit exceeded. Please wait a minute before requesting another forecast.",
+            content={"detail": "Rate limit exceeded. Please wait a minute before requesting another forecast."},
         )
 
     timestamps.append(now)
@@ -158,9 +169,8 @@ FEATURE_COLS = [
     "is_weekend", "is_payday_window", "is_dry_season",
 ]
 
-def build_features(history: pd.DataFrame, target_date: pd.Timestamp) -> dict:
-    series = history.set_index("transaction_date")["gallons_dispensed"]
-
+def build_features(series: pd.Series, target_date: pd.Timestamp) -> dict:
+    """`series` is one value per calendar day, oldest first, ending the day before target_date."""
     lag_1 = float(series.iloc[-1])
     lag_7 = float(series.iloc[-7])
     lag_14 = float(series.iloc[-14])
@@ -183,6 +193,43 @@ def build_features(history: pd.DataFrame, target_date: pd.Timestamp) -> dict:
         "is_dry_season": int(target_date.month in (3, 4, 5)),
     }
 
+
+def load_daily_series(supabase, today) -> pd.Series:
+    """Last HISTORY_DAYS calendar days up to today. Days with no recorded sales count as 0."""
+    response = (
+        supabase.table("daily_transactions")
+        .select("transaction_date, gallons_dispensed")
+        .order("transaction_date", desc=True)
+        .limit(60)
+        .execute()
+    )
+    rows = response.data or []
+    if len(rows) < MIN_HISTORY_ROWS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Need at least {MIN_HISTORY_ROWS} days of transaction history, found {len(rows)}.",
+        )
+
+    df = pd.DataFrame(rows)
+    df["transaction_date"] = pd.to_datetime(df["transaction_date"])
+    df["gallons_dispensed"] = pd.to_numeric(df["gallons_dispensed"])
+    by_day = df.groupby("transaction_date")["gallons_dispensed"].sum()
+
+    last_record = by_day.index.max().date()
+    stale_days = (today - last_record).days
+    if stale_days > MAX_STALE_DAYS:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Sales history is {stale_days} days old (last recorded {last_record.isoformat()}). "
+                "Record recent deliveries, then try again."
+            ),
+        )
+
+    window = pd.date_range(end=pd.Timestamp(today), periods=HISTORY_DAYS, freq="D")
+    return by_day.reindex(window, fill_value=0.0).astype(float)
+
+
 @app.get("/")
 def health_check():
     return {
@@ -203,32 +250,14 @@ def forecast(authenticated: bool = Depends(verify_api_key)):
 
     supabase = get_supabase()
 
-    # Pull recent transactions from Supabase
-    response = (
-        supabase.table("daily_transactions")
-        .select("transaction_date, gallons_dispensed")
-        .order("transaction_date", desc=True)
-        .limit(21)
-        .execute()
-    )
-    rows = response.data
-    if len(rows) < 14:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Need at least 14 days of transaction history, found {len(rows)}.",
-        )
+    today = datetime.now(MANILA).date()
+    series = load_daily_series(supabase, today)
+    target_date = pd.Timestamp(today) + timedelta(days=1)   # tomorrow
 
-    history = pd.DataFrame(rows)
-    history["transaction_date"] = pd.to_datetime(history["transaction_date"])
-    history = history.sort_values("transaction_date").reset_index(drop=True)
-
-    last_date = history["transaction_date"].iloc[-1]
-    target_date = last_date + timedelta(days=1)
-
-    features = build_features(history, target_date)
+    features = build_features(series, target_date)
     X = pd.DataFrame([features])[FEATURE_COLS]
 
-    predicted_gallons = float(ml_model.predict(X)[0])
+    predicted_gallons = max(0.0, float(ml_model.predict(X)[0]))
 
     record = {
         "forecast_date": target_date.date().isoformat(),
@@ -237,6 +266,7 @@ def forecast(authenticated: bool = Depends(verify_api_key)):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    supabase.table("forecasts").insert(record).execute()
+    # One forecast per day: running it again replaces today's forecast instead of adding a duplicate.
+    supabase.table("forecasts").upsert(record, on_conflict="forecast_date").execute()
 
     return record

@@ -78,7 +78,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (!_isPasswordStrong) {
       setState(() => _errorMessage =
-      'Please meet all strong password requirements before continuing.');
+          'Please meet all strong password requirements before continuing.');
       return;
     }
     setState(() {
@@ -135,7 +135,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       } else {
         _idImage = null;
         _errorMessage =
-        'We could not find a clear face photo on your ID. Retake it with the whole ID visible and no glare.';
+            'We could not find a clear face photo on your ID. Retake it with the whole ID visible and no glare.';
       }
     });
   }
@@ -338,16 +338,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
       child: file != null
           ? Image.file(file, fit: BoxFit.cover, width: double.infinity)
           : Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 40, color: const Color(0xFF94A3B8)),
-            const SizedBox(height: 8),
-            Text(placeholder,
-                style: const TextStyle(color: Color(0xFF64748B), fontSize: 13)),
-          ],
-        ),
-      ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 40, color: const Color(0xFF94A3B8)),
+                  const SizedBox(height: 8),
+                  Text(placeholder,
+                      style: const TextStyle(color: Color(0xFF64748B), fontSize: 13)),
+                ],
+              ),
+            ),
     );
   }
 
@@ -362,13 +362,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
         onPressed: _isLoading ? null : onPressed,
         child: _isLoading
             ? const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-        )
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
             : Text(label,
-            style: const TextStyle(
-                fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
       ),
     );
   }
@@ -454,7 +454,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
             validator: (v) =>
-            v != _passwordController.text ? 'Passwords do not match. Please try again.' : null,
+                v != _passwordController.text ? 'Passwords do not match. Please try again.' : null,
           ),
           if (_errorMessage != null) _errorText(),
           const SizedBox(height: 24),
@@ -474,7 +474,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
-          initialValue: _idType,
+          value: _idType,
           decoration: _fieldDecoration('ID type', Icons.badge_outlined),
           items: _idTypes
               .map((t) => DropdownMenuItem(value: t, child: Text(t, overflow: TextOverflow.ellipsis)))
@@ -595,9 +595,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   titles[_step],
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF0F172A),
-                  ),
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF0F172A),
+                      ),
                 ),
                 const SizedBox(height: 4),
                 Text(

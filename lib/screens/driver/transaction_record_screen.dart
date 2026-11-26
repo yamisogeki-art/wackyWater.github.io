@@ -50,6 +50,7 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
 
   // Selected customer for manual entry
   String? _selectedCustomerId;
+  bool _isWalkIn = false; // sale to someone without an app account
   List<Map<String, dynamic>> _customerProfiles = [];
 
   // Real-time lookup caches for related customer profiles, addresses, and delivery requests
@@ -85,6 +86,7 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
       final rows = await Supabase.instance.client
           .from('profiles')
           .select('id, full_name, email')
+          .eq('role', 'customer')
           .order('full_name');
       if (mounted) {
         setState(() {
@@ -135,11 +137,15 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
 
     _loadCustomerProfiles();
 
-    // Real-time Database Subscription
-    _transactionsStream = Supabase.instance.client
-        .from('customer_transactions')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: false);
+    // Real-time subscription to this driver's own sales only (the database enforces this too)
+    final driverId = Supabase.instance.client.auth.currentUser?.id;
+    _transactionsStream = driverId == null
+        ? Stream.value(<Map<String, dynamic>>[])
+        : Supabase.instance.client
+            .from('customer_transactions')
+            .stream(primaryKey: ['id'])
+            .eq('driver_id', driverId)
+            .order('created_at', ascending: false);
   }
 
   @override
@@ -231,9 +237,29 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
     }
   }
 
+  /// Cash only: every sale is paid in full on delivery.
+  String get _paymentCode => 'cod';
+
+  /// Uploads the optional proof photo and returns its storage path (or null if none was taken).
+  Future<String?> _uploadProof(String driverId) async {
+    final photo = _proofPhoto;
+    if (photo == null) return null;
+    final path = '$driverId/manual/${DateTime.now().millisecondsSinceEpoch}.jpg';
+    await Supabase.instance.client.storage.from('delivery-proofs').upload(
+          path,
+          File(photo.path),
+          fileOptions: const FileOptions(contentType: 'image/jpeg'),
+        );
+    return path;
+  }
+
   Future<void> _submitRecord() async {
-    final customerId = widget.stop?.request['customer_id']?.toString() ?? _selectedCustomerId;
-    if (customerId == null || customerId.isEmpty) {
+    final isWalkIn = widget.stop == null && _isWalkIn;
+    final walkInName = _userNameController.text.trim();
+    final customerId = isWalkIn
+        ? null
+        : (widget.stop?.request['customer_id']?.toString() ?? _selectedCustomerId);
+    if (!isWalkIn && (customerId == null || customerId.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a valid customer.')),
       );
@@ -272,16 +298,33 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
           );
           return;
         }
+
+        // Remember how it was paid, and keep the proof photo with the sale
+        try {
+          final me = client.auth.currentUser?.id;
+          final proofPath = me == null ? null : await _uploadProof(me);
+          await client.from('customer_transactions').update({
+            'payment_method': _paymentCode,
+            if (proofPath != null) 'proof_photo_path': proofPath,
+          }).eq('delivery_request_id', widget.stop!.request['id']);
+        } catch (e) {
+          debugPrint('Could not save payment method / photo: $e');
+        }
       } else {
-        // Direct database insert into customer_transactions (using valid DB schema columns)
+        // Manual sale, saved under the logged-in driver's name (the database stamps driver_id)
+        final me = client.auth.currentUser?.id;
+        final proofPath = me == null ? null : await _uploadProof(me);
         await client.from('customer_transactions').insert({
           'customer_id': customerId,
+          'customer_name': isWalkIn ? (walkInName.isEmpty ? 'Walk-in customer' : walkInName) : null,
           'transaction_date': dateStr,
           'gallons': _quantity.toDouble(),
           'price_per_gallon': _pricePerGallon,
           'water_type': _waterType,
           'amount_paid': isPaid ? _totalPrice : 0,
           'status': isPaid ? 'paid' : 'unpaid',
+          'payment_method': _paymentCode,
+          if (proofPath != null) 'proof_photo_path': proofPath,
         });
 
         // Sync aggregate total for demand forecasting
@@ -346,7 +389,6 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
     double totalGallons = 0;
     double totalCollection = 0;
     double totalCOD = 0;
-    double totalGCash = 0;
 
     for (final tx in rawTransactions) {
       final gal = (tx['gallons'] as num?)?.toDouble() ?? 0.0;
@@ -356,14 +398,7 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
       totalGallons += gal;
       totalCollection += paid;
 
-      final notes = (tx['notes'] ?? '').toString().toLowerCase();
-      final pm = (tx['payment_method'] ?? '').toString().toLowerCase();
-
-      if (notes.contains('gcash') || pm.contains('gcash')) {
-        totalGCash += paid;
-      } else {
-        totalCOD += paid;
-      }
+      totalCOD += paid; // cash only
     }
 
     return Container(
@@ -399,11 +434,11 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
           Row(
             children: [
               Expanded(
-                child: _summaryStatPill('COD Collected', '₱${totalCOD.toStringAsFixed(2)}', Icons.payments_outlined, const Color(0xFFD97706), const Color(0xFFFFFBEB)),
+                child: _summaryStatPill('Cash Collected', '₱${totalCOD.toStringAsFixed(2)}', Icons.payments_outlined, const Color(0xFFD97706), const Color(0xFFFFFBEB)),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _summaryStatPill('GCash Collected', '₱${totalGCash.toStringAsFixed(2)}', Icons.account_balance_wallet_outlined, const Color(0xFF2563EB), const Color(0xFFEFF6FF)),
+                child: _summaryStatPill('Sales Recorded', '${rawTransactions.length}', Icons.receipt_long_outlined, const Color(0xFF2563EB), const Color(0xFFEFF6FF)),
               ),
             ],
           ),
@@ -546,19 +581,12 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
         final notesStr = (tx['notes'] ?? '').toString();
         final pmRaw = (tx['payment_method'] ?? '').toString().toLowerCase();
 
-        String paymentMethod = 'Cash on Delivery';
-        if (pmRaw.contains('gcash') || notesStr.toLowerCase().contains('gcash')) {
-          paymentMethod = 'GCash';
-        } else if (pmRaw.contains('card') || pmRaw.contains('credit') || notesStr.toLowerCase().contains('credit/debit')) {
-          paymentMethod = 'Credit/Debit Card';
-        } else if (pmRaw.isNotEmpty) {
-          paymentMethod = tx['payment_method'].toString();
-        }
+        const paymentMethod = 'Cash on Delivery';
 
         // 9. Status
         final statusRaw = (tx['status'] ?? 'paid').toString().toLowerCase();
         final isPaid = statusRaw == 'paid' || notesStr.contains('Paid');
-        final statusBadgeText = isPaid ? 'Delivered - Paid' : 'Delivered - Credit';
+        const statusBadgeText = 'Delivered - Paid';
         final statusBadgeColor = isPaid ? const Color(0xFF15803D) : const Color(0xFFB45309);
         final statusBadgeBg = isPaid ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7);
 
@@ -748,7 +776,50 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             )
-          else
+          else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: ChoiceChip(
+                    label: const Text('App customer'),
+                    selected: !_isWalkIn,
+                    onSelected: (_) => setState(() {
+                      _isWalkIn = false;
+                      final match = _customerProfiles.where((c) => c['id'].toString() == _selectedCustomerId);
+                      _userNameController.text = match.isEmpty ? '' : ((match.first['full_name'] as String?) ?? '');
+                    }),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ChoiceChip(
+                    label: const Text('Walk-in'),
+                    selected: _isWalkIn,
+                    onSelected: (_) => setState(() {
+                      _isWalkIn = true;
+                      _userNameController.clear();
+                    }),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (_isWalkIn)
+              TextField(
+                controller: _userNameController,
+                maxLength: 60,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  hintText: 'Customer name (optional)',
+                  counterText: '',
+                  prefixIcon: const Icon(Icons.person_outline, color: AppColors.primary),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              )
+            else
             DropdownButtonFormField<String>(
               initialValue: _selectedCustomerId,
               isExpanded: true,
@@ -780,6 +851,7 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
                 }
               },
             ),
+          ],
           const SizedBox(height: 16),
 
           // 2. Delivery Location
@@ -943,65 +1015,26 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
           ),
           const SizedBox(height: 16),
 
-          // 6. Status & Payment Type Selectors
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Status', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF64748B))),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      initialValue: _status,
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'Delivered - Paid', child: Text('Delivered - Paid', overflow: TextOverflow.ellipsis)),
-                        DropdownMenuItem(value: 'Delivered - Credit', child: Text('Delivered - Credit', overflow: TextOverflow.ellipsis)),
-                        DropdownMenuItem(value: 'Delivered (Active)', child: Text('Delivered (Active)', overflow: TextOverflow.ellipsis)),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) setState(() => _status = val);
-                      },
-                    ),
-                  ],
+          // 6. Payment: cash only
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDCFCE7),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.payments_outlined, color: Color(0xFF15803D), size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Cash payment on delivery (paid in full)',
+                    style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF15803D), fontSize: 13),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Payment Method', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF64748B))),
-                    const SizedBox(height: 6),
-                    DropdownButtonFormField<String>(
-                      initialValue: _paymentType,
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'Cash on Delivery', child: Text('COD', overflow: TextOverflow.ellipsis)),
-                        DropdownMenuItem(value: 'GCash', child: Text('GCash', overflow: TextOverflow.ellipsis)),
-                        DropdownMenuItem(value: 'Credit/Debit', child: Text('Credit/Debit', overflow: TextOverflow.ellipsis)),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) setState(() => _paymentType = val);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -1031,70 +1064,70 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
             ),
             child: _proofPhoto != null
                 ? ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: Image.file(
-                      File(_proofPhoto!.path),
-                      fit: BoxFit.cover,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: Image.file(
+                            File(_proofPhoto!.path),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: CircleAvatar(
+                            backgroundColor: Colors.black.withValues(alpha: 0.6),
+                            child: IconButton(
+                              icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+                              onPressed: () => _takeProofPhoto(ImageSource.camera),
+                              tooltip: 'Retake Photo',
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: CircleAvatar(
-                      backgroundColor: Colors.black.withValues(alpha: 0.6),
-                      child: IconButton(
-                        icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
-                        onPressed: () => _takeProofPhoto(ImageSource.camera),
-                        tooltip: 'Retake Photo',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            )
+                  )
                 : Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.camera_alt_outlined, size: 36, color: Color(0xFF94A3B8)),
-                const SizedBox(height: 8),
-                const Text(
-                  'Capture Photo Proof of Delivery',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.camera_alt_outlined, size: 36, color: Color(0xFF94A3B8)),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Capture Photo Proof of Delivery',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
                       ),
-                      onPressed: () => _takeProofPhoto(ImageSource.camera),
-                      icon: const Icon(Icons.camera_alt, size: 18),
-                      label: const Text('Camera', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                        side: const BorderSide(color: AppColors.primary),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            ),
+                            onPressed: () => _takeProofPhoto(ImageSource.camera),
+                            icon: const Icon(Icons.camera_alt, size: 18),
+                            label: const Text('Camera', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          ),
+                          const SizedBox(width: 12),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              side: const BorderSide(color: AppColors.primary),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            ),
+                            onPressed: () => _takeProofPhoto(ImageSource.gallery),
+                            icon: const Icon(Icons.photo_library, size: 18),
+                            label: const Text('Gallery', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          ),
+                        ],
                       ),
-                      onPressed: () => _takeProofPhoto(ImageSource.gallery),
-                      icon: const Icon(Icons.photo_library, size: 18),
-                      label: const Text('Gallery', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                    ],
+                  ),
           ),
           const SizedBox(height: 24),
 
@@ -1112,14 +1145,14 @@ class _TransactionRecordScreenState extends State<TransactionRecordScreen> with 
               ),
               child: _isSubmitting
                   ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-              )
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                    )
                   : const Text(
-                'SUBMIT TRANSACTION RECORD',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 0.5),
-              ),
+                      'SUBMIT TRANSACTION RECORD',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                    ),
             ),
           ),
           const SizedBox(height: 24),
