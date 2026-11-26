@@ -6,6 +6,30 @@ import '../utils/validators.dart';
 const double purifiedPricePerGallon = 20.0;
 const double mineralPricePerGallon = 20.0;
 
+/// Distance-based delivery fee tiers:
+/// - ₱15: Ipil (and other areas at a similar distance)
+/// - ₱10: R.T. Lim (and other areas at a similar distance)
+/// - ₱5: All other closer locations (Tungawan, local area)
+double deliveryFeeForArea(String? areaOrAddress) {
+  if (areaOrAddress == null || areaOrAddress.trim().isEmpty) {
+    return 5.0; // Default closer location fee
+  }
+  final clean = areaOrAddress.toLowerCase();
+  if (clean.contains('ipil')) {
+    return 15.0;
+  } else if (clean.contains('r.t. lim') || clean.contains('rt lim') || clean.contains('lim')) {
+    return 10.0;
+  }
+  return 5.0;
+}
+
+String deliveryTierLabelForArea(String? areaOrAddress) {
+  final fee = deliveryFeeForArea(areaOrAddress);
+  if (fee == 15.0) return 'Far Tier (Ipil • ₱15)';
+  if (fee == 10.0) return 'Mid Tier (R.T. Lim • ₱10)';
+  return 'Local Tier (Closer Location • ₱5)';
+}
+
 /// Returns the price per gallon for a given water type with fallback error handling.
 double pricePerGallonFor(String? waterType) {
   if (waterType == null || waterType.trim().isEmpty) {

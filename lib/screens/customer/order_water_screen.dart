@@ -29,6 +29,9 @@ class _OrderWaterScreenState extends State<OrderWaterScreen> {
   dynamic _selectedAddressId;
 
   double get _pricePerGallon => pricePerGallonFor(_waterType);
+  double get _deliveryFee => deliveryFeeForArea(_addressLabel);
+  double get _subtotal => _gallons * _pricePerGallon;
+  double get _totalPrice => _subtotal + _deliveryFee;
 
   Future<void> _selectAddress() async {
     final result = await Navigator.push<Map<String, dynamic>>(
@@ -76,7 +79,8 @@ class _OrderWaterScreenState extends State<OrderWaterScreen> {
               gallons: _gallons,
               waterType: _waterType,
               pricePerGallon: _pricePerGallon,
-              estimatedTotal: _gallons * _pricePerGallon,
+              deliveryFee: _deliveryFee,
+              estimatedTotal: _totalPrice,
               orderId: response['id'].toString(),
             ),
           ),
@@ -201,10 +205,30 @@ class _OrderWaterScreenState extends State<OrderWaterScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Price per Gallon', style: TextStyle(fontSize: 16, color: AppColors.textMuted)),
+                        const Text('Subtotal', style: TextStyle(fontSize: 15, color: AppColors.textMuted)),
                         Text(
-                          '₱${_pricePerGallon.toStringAsFixed(2)}',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          '₱${_subtotal.toStringAsFixed(2)}',
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Delivery Fee', style: TextStyle(fontSize: 15, color: AppColors.textMuted)),
+                            Text(
+                              deliveryTierLabelForArea(_addressLabel),
+                              style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          '₱${_deliveryFee.toStringAsFixed(2)}',
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -220,7 +244,7 @@ class _OrderWaterScreenState extends State<OrderWaterScreen> {
                             style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.successText),
                           ),
                           Text(
-                            '₱${(_gallons * _pricePerGallon).toStringAsFixed(2)}',
+                            '₱${_totalPrice.toStringAsFixed(2)}',
                             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.successText),
                           ),
                         ],
