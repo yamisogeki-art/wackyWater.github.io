@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../theme/app_colors.dart';
-
+import 'admin_drawer.dart';
 
 class DeliveryRequestsScreen extends StatefulWidget {
   const DeliveryRequestsScreen({super.key});
@@ -13,8 +13,8 @@ class DeliveryRequestsScreen extends StatefulWidget {
 class _DeliveryRequestsScreenState extends State<DeliveryRequestsScreen> {
   late final Stream<List<Map<String, dynamic>>> _requestsStream;
   List<Map<String, dynamic>> _drivers = [];
-  Map<dynamic, Map<String, dynamic>> _addressesCache = {};
-  Map<String, Map<String, dynamic>> _customersCache = {};
+  final Map<dynamic, Map<String, dynamic>> _addressesCache = {};
+  final Map<String, Map<String, dynamic>> _customersCache = {};
   bool _isLoadingDetails = false;
 
   @override
@@ -150,6 +150,7 @@ class _DeliveryRequestsScreenState extends State<DeliveryRequestsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: const AdminDrawer(selected: AdminNav.requests),
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         title: const Text('Assign Deliveries by Barangay'),
