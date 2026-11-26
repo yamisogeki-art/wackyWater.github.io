@@ -307,6 +307,8 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
       debugPrint('Saving proof path failed: $e');
     }
 
+    if (!mounted) return;
+
     if (result.forecastSyncFailed) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
