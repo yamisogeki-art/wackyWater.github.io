@@ -71,3 +71,30 @@ create table if not exists public.registration_attempts (
   created_at timestamptz not null default now()
 );
 alter table public.registration_attempts enable row level security;
+
+-- 7) Email OTP table & helper RPC for email verification Edge Functions
+create table if not exists public.email_otps (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  ip text not null,
+  code_hash text not null,
+  attempts int not null default 0,
+  expires_at timestamptz not null,
+  verified_at timestamptz,
+  token_hash text,
+  token_expires_at timestamptz,
+  created_at timestamptz not null default now()
+);
+alter table public.email_otps enable row level security;
+
+create or replace function public.email_is_registered(p_email text)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from auth.users where lower(email) = lower(p_email)
+  );
+$$;
+grant execute on function public.email_is_registered(text) to anon, authenticated, service_role;
