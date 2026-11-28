@@ -90,7 +90,8 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   final double price;
                   final bool isEstimate;
                   if (tx != null) {
-                    price = (tx['gallons'] as num).toDouble() * (tx['price_per_gallon'] as num).toDouble();
+                    price = (tx['total_amount'] as num?)?.toDouble() ??
+                        (tx['gallons'] as num).toDouble() * (tx['price_per_gallon'] as num).toDouble();
                     isEstimate = false;
                   } else {
                     price = gallons.toDouble() * pricePerGallonFor(order['water_type'] as String?);

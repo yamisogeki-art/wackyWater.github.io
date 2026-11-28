@@ -6,19 +6,23 @@ class OrderSuccessScreen extends StatelessWidget {
   final int gallons;
   final String waterType;
   final double pricePerGallon;
-  final double deliveryFee;
   final double estimatedTotal;
   final String orderId;
+  final double deliveryFeePerGallon;
+  final double? deliveryFee;
 
   const OrderSuccessScreen({
     super.key,
     required this.gallons,
     required this.waterType,
     required this.pricePerGallon,
-    this.deliveryFee = 5.0,
     required this.estimatedTotal,
     required this.orderId,
+    this.deliveryFeePerGallon = 0,
+    this.deliveryFee,
   });
+
+  double get effectiveDeliveryFee => deliveryFee ?? (gallons * deliveryFeePerGallon);
 
   @override
   Widget build(BuildContext context) {
@@ -70,8 +74,9 @@ class OrderSuccessScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     _row('Gallons', '$gallons ${gallons == 1 ? 'gallon' : 'gallons'}'),
                     _row('Water Type', waterType == 'mineral' ? 'Mineral' : 'Purified'),
-                    _row('Subtotal (${gallons}x ₱${pricePerGallon.toStringAsFixed(2)})', '₱${(gallons * pricePerGallon).toStringAsFixed(2)}'),
-                    _row('Distance Delivery Fee', '₱${deliveryFee.toStringAsFixed(2)}'),
+                    _row('Price per Gallon', '₱${pricePerGallon.toStringAsFixed(2)}'),
+                    if (effectiveDeliveryFee > 0)
+                      _row('Delivery Fee', '₱${effectiveDeliveryFee.toStringAsFixed(2)}'),
                     _row('Total Price', '₱${estimatedTotal.toStringAsFixed(2)}'),
                     _row(
                       'Estimated Delivery',
